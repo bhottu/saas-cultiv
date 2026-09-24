@@ -1,0 +1,4 @@
+=== LINT FAILURES ===
+FAIL: F:\PROMT-ENGINEER\saas\app\Http\Controllers\SalesController.php
+FAIL: F:\PROMT-ENGINEER\saas\app\Http\Controllers\StockMovementController.php
+DONE

@@ -1,0 +1,42 @@
+=== CONFIG FILES ===
+app.php, auth.php, business.php, cache.php, database.php, filesystems.php, logging.php, mail.php, permissions.php, queue.php, saas.php, services.php, session.php
+=== business.php exists? ===
+True
+=== routes files ===
+api.php, auth.php, console.php, web.php
+=== views tree ===
+dashboard.blade.php
+welcome.blade.php
+admin\dashboard.blade.php
+auth\confirm-password.blade.php
+auth\forgot-password.blade.php
+auth\login.blade.php
+auth\register.blade.php
+auth\reset-password.blade.php
+auth\verify-email.blade.php
+billing\index.blade.php
+billing\pay.blade.php
+components\application-logo.blade.php
+components\auth-session-status.blade.php
+components\danger-button.blade.php
+components\dropdown-link.blade.php
+components\dropdown.blade.php
+components\input-error.blade.php
+components\input-label.blade.php
+components\modal.blade.php
+components\nav-link.blade.php
+components\primary-button.blade.php
+components\responsive-nav-link.blade.php
+components\secondary-button.blade.php
+components\text-input.blade.php
+files\index.blade.php
+layouts\app.blade.php
+layouts\guest.blade.php
+layouts\navigation.blade.php
+profile\edit.blade.php
+profile\partials\delete-user-form.blade.php
+profile\partials\update-password-form.blade.php
+profile\partials\update-profile-information-form.blade.php
+team\index.blade.php
+tenants\index.blade.php
+tokens\index.blade.php

@@ -1,0 +1,22 @@
+﻿
+   ReflectionException 
+
+  Class "App\Http\Controllers\ProductsController" does not exist
+
+  at vendor\laravel\framework\src\Illuminate\Foundation\Console\RouteListCommand.php:255
+    251Ôûò             if ($this->isFrameworkController($route)) {
+    252Ôûò                 return false;
+    253Ôûò             }
+    254Ôûò 
+  Ô×£ 255Ôûò             $path = (new ReflectionClass($route->getControllerClass()))
+    256Ôûò                 ->getFileName();
+    257Ôûò         } else {
+    258Ôûò             return false;
+    259Ôûò         }
+
+  1   vendor\laravel\framework\src\Illuminate\Foundation\Console\RouteListCommand.php:255
+      ReflectionClass::__construct("App\Http\Controllers\ProductsController")
+
+  2   vendor\laravel\framework\src\Illuminate\Foundation\Console\RouteListCommand.php:150
+      Illuminate\Foundation\Console\RouteListCommand::isVendorRoute(Object(Illuminate\Routing\Route))
+

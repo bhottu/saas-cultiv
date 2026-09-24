@@ -1,0 +1,18 @@
+PHPLINT:
+FAIL: F:\PROMT-ENGINEER\saas\app\Http\Controllers\SalesController.php :: PHP Parse error:  syntax error, unexpected token "public" in F:\PROMT-ENGINEER\saas\app\Http\Controllers\SalesController.php on line 73  Parse error: syntax error, unexpected token "public" in F:\PROMT-ENGINEER\saas\app\Http\Controllers\SalesController.php on line 73 Errors parsing F:\PROMT-ENGINEER\saas\app\Http\Controllers\SalesController.php
+FAIL: F:\PROMT-ENGINEER\saas\app\Http\Controllers\StockMovementController.php :: PHP Parse error:  syntax error, unexpected token "=>" in F:\PROMT-ENGINEER\saas\app\Http\Controllers\StockMovementController.php on line 183  Parse error: syntax error, unexpected token "=>" in F:\PROMT-ENGINEER\saas\app\Http\Controllers\StockMovementController.php on line 183 Errors parsing F:\PROMT-ENGINEER\saas\app\Http\Controllers\StockMovementController.php
+CTRL:
+ApiTokenController, BillingController, BrandsController, BusinessInvoicesController, CategoriesController, Controller, CustomersController, DashboardController, ExpensesController, FileController, ProfileController, PurchasesController, SalesController, StockController, StockMovementController, SuppliersController, TeamController, TenantController, WarehousesController, WebhookController
+MODELS:
+AuditLog, Brand, Category, FileEntry, Invoice, Payment, Plan, Product, StockBalance, StockMovement, Subscription, Tenant, TenantUser, UsageRecord, User, Warehouse, WebhookEvent
+SERVICES:
+AuditLogger, BusinessAuthorization, BusinessUsageService, DocumentNumberingService, InventoryService, Money, PaymentService, QrisPwClient, SubscriptionService, TenantContext, UsageService, WebhookService
+VIEWDIRS:
+admin, auth, billing, components, files, layouts, profile, team, tenants, tokens
+MIGR:
+0001_01_01_000000_create_users_table.php, 0001_01_01_000001_create_cache_table.php, 0001_01_01_000002_create_jobs_table.php, 2026_09_21_133717_create_personal_access_tokens_table.php, 2026_09_21_140000_create_saas_core_tables.php, 2026_09_21_140100_create_saas_billing_tables.php, 2026_09_21_140200_create_invoice_sequences_table.php, 2026_09_22_090000_create_business_inventory_tables.php, 2026_09_22_090100_create_business_products_table.php
+CONCERNS:
+BelongsToBusinessSale, BelongsToTenant
+PRODUCTSCONTROLLER_EXISTS:
+False
+DONE

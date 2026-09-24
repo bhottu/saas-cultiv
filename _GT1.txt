@@ -1,0 +1,76 @@
+=== CONTROLLERS ===
+ApiTokenController :: 1347
+BillingController :: 4409
+BrandsController :: 3403
+BusinessInvoicesController :: 2109
+CategoriesController :: 3634
+Controller :: 77
+CustomersController :: 4560
+DashboardController :: 1073
+ExpensesController :: 5170
+FileController :: 4101
+ProfileController :: 1416
+PurchasesController :: 5669
+SalesController :: 4236
+StockController :: 1324
+StockMovementController :: 7362
+SuppliersController :: 4091
+TeamController :: 5227
+TenantController :: 3182
+WarehousesController :: 4102
+WebhookController :: 681
+=== MODELS ===
+AuditLog :: 1109
+Brand :: 1303
+Category :: 1370
+FileEntry :: 642
+Invoice :: 927
+Payment :: 1061
+Plan :: 1029
+Product :: 2283
+StockBalance :: 835
+StockMovement :: 985
+Subscription :: 2006
+Tenant :: 1584
+TenantUser :: 616
+UsageRecord :: 709
+User :: 1451
+Warehouse :: 895
+WebhookEvent :: 614
+=== SERVICES ===
+AuditLogger :: 522
+BusinessAuthorization :: 2396
+BusinessUsageService :: 2972
+DocumentNumberingService :: 1466
+InventoryService :: 6623
+Money :: 2887
+PaymentService :: 5750
+QrisPwClient :: 1970
+SubscriptionService :: 5898
+TenantContext :: 1739
+UsageService :: 2520
+WebhookService :: 6542
+=== VIEWDIRS ===
+admin
+auth
+billing
+components
+files
+layouts
+profile
+team
+tenants
+tokens
+=== MIGRATIONS ===
+0001_01_01_000000_create_users_table.php
+0001_01_01_000001_create_cache_table.php
+0001_01_01_000002_create_jobs_table.php
+2026_09_21_133717_create_personal_access_tokens_table.php
+2026_09_21_140000_create_saas_core_tables.php
+2026_09_21_140100_create_saas_billing_tables.php
+2026_09_21_140200_create_invoice_sequences_table.php
+2026_09_22_090000_create_business_inventory_tables.php
+2026_09_22_090100_create_business_products_table.php
+=== CONCERNS ===
+BelongsToBusinessSale.php
+BelongsToTenant.php
