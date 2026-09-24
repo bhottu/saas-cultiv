@@ -72,6 +72,11 @@ class ApplicationShellTest extends TestCase
             '/categories/create',
             '/brands',
             '/brands/create',
+            '/sales',
+            '/sales/dashboard',
+            '/sales/returns',
+            '/sales/report',
+            '/customers',
             '/files',
             '/team',
             '/billing',
@@ -84,6 +89,9 @@ class ApplicationShellTest extends TestCase
                 ->assertSee('id="sidebar"', false)
                 ->assertSee('id="mobile-sidebar"', false)
                 ->assertSee(__('Main navigation'))
+                // Shared brand: desktop sidebar and mobile drawer both use the same lockup.
+                ->assertSee('Cultiv One')
+                ->assertSee('The smarter way to manage your business')
                 // Header keeps the workspace switcher, notifications and user menu.
                 ->assertSee('Shell Workspace')
                 ->assertSee('Switch workspace')
@@ -102,6 +110,11 @@ class ApplicationShellTest extends TestCase
             '/categories/create' => 'categories.index',
             '/brands' => 'brands.index',
             '/brands/create' => 'brands.index',
+            '/sales' => 'sales.index',
+            '/sales/dashboard' => 'sales.index',
+            '/sales/returns' => 'sales.returns',
+            '/sales/report' => 'sales.report',
+            '/customers' => 'customers.index',
             '/files' => 'files.index',
             '/team' => 'team.index',
             '/billing' => 'billing.index',
@@ -141,7 +154,7 @@ class ApplicationShellTest extends TestCase
 
         foreach ([
             'products.index', 'stock.index', 'categories.index', 'brands.index',
-            'sales.index', 'customers.index',
+            'sales.index', 'sales.returns', 'sales.report', 'customers.index',
             'files.index', 'team.index', 'billing.index', 'tenants.index',
             'profile.edit', 'tokens.index',
         ] as $routeName) {
@@ -151,6 +164,28 @@ class ApplicationShellTest extends TestCase
                 "Navigation must link to {$routeName}."
             );
         }
+
+        $this->assertStringNotContainsString(
+            'href="'.route('sales.dashboard').'"',
+            $sidebar,
+            'The detailed sales dashboard must remain available without appearing as a second sidebar dashboard.'
+        );
+
+        foreach (['Overview', 'Sales', 'Inventory', 'Workspace', 'Account'] as $group) {
+            $this->assertStringContainsString($group, $sidebar);
+        }
+
+        foreach (['Dashboard', 'Orders', 'Customers', 'Returns', 'Reports', 'Products', 'Stock', 'Categories', 'Brands', 'Files', 'Team', 'Billing', 'Workspaces', 'Profile', 'API Tokens'] as $label) {
+            $this->assertStringContainsString($label, $sidebar);
+        }
+
+        $groupOrder = array_map(
+            fn (string $group): int => strpos($sidebar, $group),
+            ['Overview', 'Sales', 'Inventory', 'Workspace', 'Account']
+        );
+        $sortedGroups = $groupOrder;
+        sort($sortedGroups);
+        $this->assertSame($sortedGroups, $groupOrder, 'Navigation groups must follow the business information hierarchy.');
     }
 
     public function test_navigation_is_scoped_to_the_active_workspace(): void

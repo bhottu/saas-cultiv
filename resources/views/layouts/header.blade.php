@@ -29,7 +29,7 @@
             @isset($header)
                 {{ $header }}
             @else
-                <h1 class="text-lg font-semibold text-gray-900">{{ config('app.name', 'Laravel') }}</h1>
+                <h1 class="text-lg font-semibold text-gray-900">{{ config('app.name', 'Cultiv One') }}</h1>
             @endisset
         </div>
 

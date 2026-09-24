@@ -3,15 +3,21 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>{{ config('app.name', 'SaaS') }} — Multi-tenant SaaS with QRIS payments</title>
+        <title>{{ config('app.name', 'Cultiv One') }} - {{ config('app.tagline', 'The smarter way to manage your business') }}</title>
+        <meta name="description" content="Cultiv One is the smarter way to manage sales, inventory, customers, purchasing and business performance in one workspace.">
+        <meta property="og:title" content="{{ config('app.name', 'Cultiv One') }} - {{ config('app.tagline', 'The smarter way to manage your business') }}">
+        <meta property="og:description" content="A modern business management platform for sales, inventory, customers and insights.">
+        <meta name="theme-color" content="#4f46e5">
+        <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
+        <link rel="alternate icon" type="image/png" sizes="64x64" href="{{ asset('favicon-64.png') }}">
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body class="font-sans antialiased bg-white text-gray-800">
         {{-- Navbar --}}
         <nav class="border-b border-gray-100">
-            <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-                <a href="{{ route('home') }}" class="text-lg font-bold text-indigo-600">
-                    {{ config('app.name', 'SaaS') }}
+            <div class="max-w-6xl mx-auto px-4 min-h-20 flex flex-wrap items-center justify-between gap-3 py-2">
+                <a href="{{ route('home') }}" class="block min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+                    <x-brand-lockup />
                 </a>
                 <div class="flex items-center gap-4 text-sm">
                     @auth
@@ -27,12 +33,14 @@
 
         {{-- Hero --}}
         <section class="max-w-6xl mx-auto px-4 pt-20 pb-14 text-center">
-            <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight">
-                Run your business <span class="text-indigo-600">securely</span> in one workspace
+            <div class="mx-auto mb-6 inline-flex rounded-full border border-indigo-100 bg-indigo-50 px-4 py-1.5 text-sm font-semibold text-indigo-700">
+                {{ config('app.tagline', 'The smarter way to manage your business') }}
+            </div>
+            <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight text-gray-950">
+                Run your business <span class="text-indigo-600">smarter</span> in one workspace
             </h1>
             <p class="mt-5 text-lg text-gray-500 max-w-2xl mx-auto">
-                Multi-tenant SaaS with team roles, usage limits, and instant QRIS payments.
-                Start free — upgrade whenever your team grows.
+                Sales, inventory, customers, purchasing, payments and reports—designed for any business that wants one reliable source of truth.
             </p>
             <div class="mt-8 flex justify-center gap-3">
                 @auth
@@ -80,25 +88,28 @@
         <section class="bg-gray-50 border-y border-gray-100">
             <div class="max-w-6xl mx-auto px-4 py-16 grid md:grid-cols-3 gap-8 text-center">
                 <div>
-                    <div class="text-2xl mb-2">👥</div>
-                    <h3 class="font-semibold">Teams & roles</h3>
-                    <p class="text-sm text-gray-500 mt-1">Owner, Admin, Manager, Staff, Viewer — permissions enforced server-side.</p>
+                    <div class="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-xl">📦</div>
+                    <h3 class="font-semibold">Products & inventory</h3>
+                    <p class="text-sm text-gray-500 mt-1">Keep products, stock, warehouses and every stock movement in sync.</p>
                 </div>
                 <div>
-                    <div class="text-2xl mb-2">🔒</div>
-                    <h3 class="font-semibold">Isolated workspaces</h3>
-                    <p class="text-sm text-gray-500 mt-1">Every record is scoped to your tenant. Cross-workspace access is impossible.</p>
+                    <div class="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-xl">🧾</div>
+                    <h3 class="font-semibold">Sales & customers</h3>
+                    <p class="text-sm text-gray-500 mt-1">Manage orders, payments, customers and returns from one connected workflow.</p>
                 </div>
                 <div>
-                    <div class="text-2xl mb-2">📱</div>
-                    <h3 class="font-semibold">QRIS payments</h3>
-                    <p class="text-sm text-gray-500 mt-1">Scan, pay, done. Subscription activates automatically once payment is verified.</p>
+                    <div class="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-xl">📈</div>
+                    <h3 class="font-semibold">Reports & control</h3>
+                    <p class="text-sm text-gray-500 mt-1">Understand performance with clear reports, secure roles and auditable activity.</p>
                 </div>
             </div>
         </section>
 
-        <footer class="max-w-6xl mx-auto px-4 py-10 text-center text-sm text-gray-400">
-            {{ config('app.name', 'SaaS') }} — built on Laravel {{ app()->version() }}
+        <footer class="border-t border-gray-100 bg-gray-50">
+            <div class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 py-8 text-center text-sm text-gray-500 sm:flex-row sm:text-left">
+                <x-brand-lockup />
+                <p>© {{ now()->year }} {{ config('app.name', 'Cultiv One') }}. All rights reserved.</p>
+            </div>
         </footer>
     </body>
 </html>

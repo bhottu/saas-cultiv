@@ -62,28 +62,17 @@
         ];
     }
 
-    // Sales: orders, returns and the sales dashboard. The report is financial, so it follows
-    // the existing reports permission instead of the sales read/write verbs.
+    // Sales: orders, customers, returns and reports. The detailed sales dashboard stays
+    // available at its existing URL but is intentionally not a second sidebar dashboard.
+    // The report is financial, so it follows the existing reports permission.
     $sales = [];
 
     if ($business->can('sales.view')) {
         $sales[] = [
-            'label' => __('Sales'),
+            'label' => __('Orders'),
             'icon' => 'shopping-cart',
             'href' => route('sales.index'),
-            'active' => request()->routeIs('sales.index', 'sales.create', 'sales.show', 'sales.print'),
-        ];
-        $sales[] = [
-            'label' => __('Sales dashboard'),
-            'icon' => 'home',
-            'href' => route('sales.dashboard'),
-            'active' => request()->routeIs('sales.dashboard'),
-        ];
-        $sales[] = [
-            'label' => __('Sales returns'),
-            'icon' => 'arrow-path',
-            'href' => route('sales.returns'),
-            'active' => request()->routeIs('sales.returns', 'sales.return'),
+            'active' => request()->routeIs('sales.index', 'sales.create', 'sales.show', 'sales.print', 'sales.dashboard'),
         ];
     }
 
@@ -96,9 +85,18 @@
         ];
     }
 
+    if ($business->can('sales.view')) {
+        $sales[] = [
+            'label' => __('Returns'),
+            'icon' => 'arrow-path',
+            'href' => route('sales.returns'),
+            'active' => request()->routeIs('sales.returns', 'sales.return'),
+        ];
+    }
+
     if ($business->can('reports.view')) {
         $sales[] = [
-            'label' => __('Sales report'),
+            'label' => __('Reports'),
             'icon' => 'chart-bar',
             'href' => route('sales.report'),
             'active' => request()->routeIs('sales.report'),
@@ -143,7 +141,7 @@
             'active' => request()->routeIs('profile.*'),
         ],
         [
-            'label' => __('API tokens'),
+            'label' => __('API Tokens'),
             'icon' => 'key',
             'href' => route('tokens.index'),
             'active' => request()->routeIs('tokens.*'),
@@ -175,10 +173,9 @@
 <aside id="sidebar"
        class="hidden border-r border-gray-200 bg-white lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 lg:flex lg:w-72 lg:flex-col">
     {{-- Brand --}}
-    <div class="flex h-16 shrink-0 items-center gap-2 border-b border-gray-200 px-5">
-        <a href="{{ route('dashboard') }}" class="flex min-w-0 items-center gap-2">
-            <x-application-logo class="h-8 w-8 shrink-0 fill-current text-indigo-600" />
-            <span class="truncate text-sm font-semibold text-gray-900">{{ config('app.name', 'Laravel') }}</span>
+    <div class="min-h-20 shrink-0 border-b border-gray-200 px-5 py-2.5">
+        <a href="{{ route('dashboard') }}" class="block min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+            <x-brand-lockup />
         </a>
     </div>
 
@@ -218,10 +215,9 @@
          aria-modal="true"
          aria-label="{{ __('Navigation') }}"
          class="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-white shadow-xl">
-        <div class="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-gray-200 px-4">
-            <a href="{{ route('dashboard') }}" class="flex min-w-0 items-center gap-2" @click="sidebarOpen = false">
-                <x-application-logo class="h-8 w-8 shrink-0 fill-current text-indigo-600" />
-                <span class="truncate text-sm font-semibold text-gray-900">{{ config('app.name', 'Laravel') }}</span>
+        <div class="flex min-h-20 shrink-0 items-center justify-between gap-2 border-b border-gray-200 px-4 py-2">
+            <a href="{{ route('dashboard') }}" class="block min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500" @click="sidebarOpen = false">
+                <x-brand-lockup />
             </a>
 
             <button type="button" @click="sidebarOpen = false"

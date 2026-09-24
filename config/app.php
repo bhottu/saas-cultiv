@@ -13,7 +13,8 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'Laravel'),
+    'name' => env('APP_NAME', 'Cultiv One'),
+    'tagline' => env('APP_TAGLINE', 'The smarter way to manage your business'),
 
     /*
     |--------------------------------------------------------------------------

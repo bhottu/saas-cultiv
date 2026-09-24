@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 96" role="img" aria-labelledby="title description">
+    <title id="title">Cultiv One</title>
+    <desc id="description">The smarter way to manage your business</desc>
+    <g transform="translate(4 4)">
+        <rect width="88" height="88" rx="25" fill="#4f46e5"/>
+        <path d="M53 28a24 24 0 1 0 0 40" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round"/>
+        <path d="m60 34 10-7v42" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <text x="112" y="45" fill="#111827" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="32" font-weight="750" letter-spacing="-1">Cultiv One</text>
+    <text x="113" y="69" fill="#6b7280" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="15" font-weight="500">The smarter way to manage your business</text>
+</svg>

@@ -560,6 +560,34 @@ class SalesFlowTest extends TestCase
             ->assertSee('Top selling products');
     }
 
+    public function test_main_dashboard_and_detailed_dashboard_share_the_same_sales_data(): void
+    {
+        $this->recordSale(['payment_amount' => 30000]);
+
+        $main = $this->asMember($this->tenant)->get('/dashboard')
+            ->assertOk()
+            ->assertSee('Sales performance')
+            ->assertSee('Sales today')
+            ->assertSee('Top selling products');
+
+        $detailed = $this->asMember($this->tenant)->get('/sales/dashboard')->assertOk();
+
+        $mainData = $main->viewData('salesOverview');
+        $detailedData = $detailed->viewData('dashboardData');
+
+        $this->assertSame($detailedData['summary'], $mainData['summary']);
+        $this->assertSame($detailedData['series'], $mainData['series']);
+        $this->assertSame($detailedData['maxDayTotal'], $mainData['maxDayTotal']);
+        $this->assertSame(
+            $detailedData['topProducts']->pluck('product_id')->all(),
+            $mainData['topProducts']->pluck('product_id')->all()
+        );
+        $this->assertSame(
+            $detailedData['recentSales']->modelKeys(),
+            $mainData['recentSales']->modelKeys()
+        );
+    }
+
     public function test_inventory_movement_direction_is_correct(): void
     {
         // A sale leaves the building, a sales return brings goods back.

@@ -14,7 +14,11 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>{{ $sale->invoice_number }}</title>
+        <title>{{ config('app.name', 'Cultiv One') }} - {{ config('app.tagline', 'The smarter way to manage your business') }}</title>
+        <meta name="description" content="Invoice {{ $sale->invoice_number }} from Cultiv One">
+        <meta name="theme-color" content="#4f46e5">
+        <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
+        <link rel="alternate icon" type="image/png" sizes="64x64" href="{{ asset('favicon-64.png') }}">
 
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
@@ -44,7 +48,7 @@
             {{-- Header --}}
             <div class="flex flex-wrap items-start justify-between gap-6 border-b border-gray-200 pb-6">
                 <div>
-                    <div class="text-lg font-bold text-gray-900">{{ $tenant?->name ?? config('app.name', 'Laravel') }}</div>
+                    <div class="text-lg font-bold text-gray-900">{{ $tenant?->name ?? config('app.name', 'Cultiv One') }}</div>
                     @if ($sale->warehouse?->address)
                         <div class="mt-1 text-sm text-gray-500">{{ $sale->warehouse->address }}</div>
                     @endif

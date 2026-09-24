@@ -1,6 +1,8 @@
-# SaaS Platform
+# Cultiv One
 
-Production-ready multi-tenant SaaS starter (Laravel 12, PHP 8.2+, PostgreSQL, Redis, Tailwind, QRIS.PW payments).
+> The smarter way to manage your business.
+
+Production-ready, multi-tenant business management SaaS (Laravel 12, PHP 8.2+, PostgreSQL, Redis, Tailwind, QRIS.PW payments).
 
 ## Architecture
 

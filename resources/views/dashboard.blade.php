@@ -131,5 +131,20 @@
                 </ul>
             </div>
         </div>
+
+        {{-- Business sales: same shared data and widgets as /sales/dashboard. --}}
+        @if ($salesOverview)
+            <section aria-labelledby="sales-overview-title">
+                <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                        <h3 id="sales-overview-title" class="text-lg font-semibold text-gray-900">{{ __('Sales performance') }}</h3>
+                        <p class="text-sm text-gray-500">{{ __('Today, this month and the products that sell best.') }}</p>
+                    </div>
+                    <a href="{{ route('sales.index') }}" class="text-sm font-medium text-indigo-600 hover:underline">{{ __('View all orders') }}</a>
+                </div>
+
+                @include('sales.partials.dashboard-summary', ['dashboardData' => $salesOverview])
+            </section>
+        @endif
     </div>
 </x-app-layout>

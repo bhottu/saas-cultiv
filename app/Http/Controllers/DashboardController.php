@@ -2,11 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\BusinessAuthorization;
+use App\Services\SalesDashboardService;
 use App\Services\UsageService;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
+    public function __construct(
+        private readonly BusinessAuthorization $business,
+        private readonly SalesDashboardService $salesDashboard,
+    ) {}
+
     public function __invoke(Request $request)
     {
         $ctx = app('tenant.context');
@@ -16,6 +23,12 @@ class DashboardController extends Controller
         $subscription = $tenant->activeSubscription()->with('plan')->first();
         $usage = app(UsageService::class);
 
+        // Sales visibility remains permission-aware. Users without sales.view keep the
+        // existing dashboard without receiving a new, unauthorized business summary.
+        $salesOverview = $this->business->can('sales.view')
+            ? $this->salesDashboard->data()
+            : null;
+
         return view('dashboard', [
             'tenant' => $tenant,
             'subscription' => $subscription,
@@ -24,6 +37,7 @@ class DashboardController extends Controller
             'recentPayments' => $tenant->payments()->latest()->take(5)->get(),
             'recentInvoices' => $tenant->invoices()->latest()->take(5)->get(),
             'notifications' => $request->user()->notifications()->latest()->take(8)->get(),
+            'salesOverview' => $salesOverview,
         ]);
     }
 }
