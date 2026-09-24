@@ -22,11 +22,11 @@ class ExpensesController extends Controller
         $query = Expense::with(['category', 'createdBy'])->where('tenant_id', $tenant->id);
 
         if ($request->filled('from')) {
-            $query->whereDate('expense_date', '>=', $request->getString('from'));
+            $query->whereDate('expense_date', '>=', $request->string('from')->toString());
         }
 
         if ($request->filled('to')) {
-            $query->whereDate('expense_date', '<=', $request->getString('to'));
+            $query->whereDate('expense_date', '<=', $request->string('to')->toString());
         }
 
         $expenses = $query->latest('expense_date')->paginate(50);

@@ -292,4 +292,36 @@ class ProductCrudTest extends TestCase
     {
         $this->get('/products')->assertRedirect('/login');
     }
+
+    /**
+     * Regression: the index filters used Illuminate\Http\Request::getString(), which does
+     * not exist, so any filtered request to /products failed with a BadMethodCallException.
+     */
+    public function test_index_search_and_category_filters_work(): void
+    {
+        $category = Category::create(['tenant_id' => $this->tenant->id, 'name' => 'Minuman']);
+        $brand = Brand::create(['tenant_id' => $this->tenant->id, 'name' => 'Kopi Nusantara']);
+
+        $this->makeProduct(['category_id' => $category->id, 'brand_id' => $brand->id]);
+        $this->makeProduct(['name' => 'Teh Manis', 'sku' => 'TH-001']);
+
+        $this->asMember($this->tenant)->get('/products?search=Kopi')
+            ->assertOk()
+            ->assertSee('Kopi Susu')
+            ->assertDontSee('Teh Manis');
+
+        $this->asMember($this->tenant)->get('/products?category_id='.$category->id)
+            ->assertOk()
+            ->assertSee('Kopi Susu')
+            ->assertDontSee('Teh Manis');
+
+        $this->asMember($this->tenant)->get('/products?brand_id='.$brand->id)
+            ->assertOk()
+            ->assertSee('Kopi Susu')
+            ->assertDontSee('Teh Manis');
+
+        $this->asMember($this->tenant)->get('/products?active_only=1')
+            ->assertOk()
+            ->assertSee('Kopi Susu');
+    }
 }

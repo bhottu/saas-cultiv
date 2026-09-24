@@ -20,7 +20,7 @@ class BrandsController extends Controller
         $query = Brand::where('tenant_id', $tenant->id);
 
         if ($request->filled('search')) {
-            $term = $request->getString('search');
+            $term = $request->string('search')->toString();
             $query->where('name', 'like', "%{$term}%");
         }
 
@@ -32,11 +32,11 @@ class BrandsController extends Controller
             $query->where('is_active', false);
         }
 
-        $brands = $query->orderBy('name')->paginate(50);
+        $brands = $query->orderBy('name')->paginate(50)->withQueryString();
 
         return view('brands.index', [
             'brands' => $brands,
-            'search' => $request->getString('search', ''),
+            'search' => $request->string('search')->toString(),
         ]);
     }
 
@@ -47,6 +47,7 @@ class BrandsController extends Controller
         return view('brands.form', [
             'brand' => new Brand(),
             'pageTitle' => 'Add Brand',
+            'submitUrl' => route('brands.store'),
         ]);
     }
 
@@ -81,6 +82,7 @@ class BrandsController extends Controller
         return view('brands.form', [
             'brand' => $brand,
             'pageTitle' => 'Edit Brand',
+            'submitUrl' => route('brands.update', $brand),
         ]);
     }
 

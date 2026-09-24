@@ -33,7 +33,7 @@ class ProductsController extends Controller
         $query = Product::with(['category', 'brand'])->where('tenant_id', $tenant->id);
 
         if ($request->filled('search')) {
-            $term = $request->getString('search');
+            $term = $request->string('search')->toString();
             $query->where(function ($q) use ($term) {
                 $q->where('name', 'like', "%{$term}%")
                     ->orWhere('sku', 'like', "%{$term}%")
@@ -42,11 +42,11 @@ class ProductsController extends Controller
         }
 
         if ($request->filled('category_id')) {
-            $query->where('category_id', (int) $request->getString('category_id'));
+            $query->where('category_id', $request->integer('category_id'));
         }
 
         if ($request->filled('brand_id')) {
-            $query->where('brand_id', (int) $request->getString('brand_id'));
+            $query->where('brand_id', $request->integer('brand_id'));
         }
 
         if ($request->boolean('active_only')) {

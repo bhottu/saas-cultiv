@@ -1,65 +1,132 @@
 <x-app-layout>
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            {{ $tenant->name }} — Dashboard
-        </h2>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="min-w-0">
+                <h2 class="truncate text-lg font-semibold leading-tight text-gray-900">{{ $tenant->name }}</h2>
+                <p class="truncate text-sm text-gray-500">{{ __('Business dashboard') }}</p>
+            </div>
+
+            <a href="{{ route('billing.index') }}"
+               class="inline-flex shrink-0 items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                {{ __('Manage billing') }}
+            </a>
+        </div>
     </x-slot>
 
-    <div class="py-12 max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
-        <div class="bg-white rounded-lg shadow p-6">
-            @if ($subscription)
-                <div class="flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                        <div class="text-sm text-gray-500">Current plan</div>
-                        <div class="text-2xl font-bold">
-                            {{ $subscription->plan->name }}
-                            <span class="text-sm font-normal px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">{{ ucfirst($subscription->status) }}</span>
-                        </div>
+    @php
+        // Read-only summary of the active tenant — the dashboard never becomes a CRUD screen.
+        $seatUsed = $usage['max_users'] ?? 0;
+        $seatLimit = $subscription?->plan?->limit('max_users');
+        $apiUsed = $apiUsage['used'] ?? 0;
+        $apiLimit = $apiUsage['limit'] ?? null;
+
+        $percent = fn ($used, $limit) => $limit ? min(100, (int) round(((int) $used / max(1, (int) $limit)) * 100)) : null;
+        $barColour = fn (?int $pct) => $pct !== null && $pct >= 90 ? 'bg-red-500' : 'bg-indigo-600';
+    @endphp
+
+    <div class="mx-auto max-w-7xl space-y-6 py-12 sm:px-6 lg:px-8">
+        @if (session('success'))
+            <div class="rounded-lg bg-green-100 p-3 text-green-800">{{ session('success') }}</div>
+        @endif
+
+        {{-- Summary --}}
+        <div class="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+            {{-- Subscription --}}
+            <div class="rounded-lg bg-white p-5 shadow">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">{{ __('Subscription') }}</div>
+
+                @if ($subscription)
+                    <div class="mt-1 flex flex-wrap items-center gap-2">
+                        <span class="text-lg font-bold text-gray-900">{{ $subscription->plan->name }}</span>
+                        <span class="rounded-full bg-indigo-100 px-2 py-0.5 text-xs text-indigo-700">{{ ucfirst($subscription->status) }}</span>
+                    </div>
+                    <div class="mt-1 text-sm text-gray-500">
                         @if ($subscription->current_period_end)
-                            <div class="text-sm text-gray-500 mt-1">
-                                {{ $subscription->status === 'trialing' ? 'Trial ends' : 'Renews' }}:
-                                {{ $subscription->current_period_end->format('d M Y') }}
-                            </div>
+                            {{ $subscription->status === 'trialing' ? __('Trial ends') : __('Renews') }}:
+                            {{ $subscription->current_period_end->format('d M Y') }}
+                        @else
+                            {{ __('No renewal date') }}
                         @endif
                     </div>
-                    <a href="{{ route('billing.index') }}" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Manage billing</a>
-                </div>
-            @else
-                <p>No active subscription. <a class="text-indigo-600 underline" href="{{ route('billing.index') }}">Choose a plan →</a></p>
-            @endif
-        </div>
+                @else
+                    <div class="mt-1 text-sm text-gray-500">{{ __('No active subscription') }}</div>
+                    <a href="{{ route('billing.index') }}" class="mt-1 inline-block text-sm text-indigo-600 underline">{{ __('Choose a plan') }}</a>
+                @endif
+            </div>
 
-        <div class="bg-white rounded-lg shadow p-6">
-            <h3 class="font-semibold mb-3">Usage & quota</h3>
-            <div class="space-y-3 text-sm">
-                <div class="flex justify-between"><span>API calls (this month)</span><span>{{ $apiUsage['used'] }} / {{ $apiUsage['limit'] ?? '∞' }}</span></div>
-                <div class="flex justify-between"><span>Team members</span><span>{{ $usage['max_users'] }} / {{ $subscription?->plan?->limit('max_users') ?? '∞' }}</span></div>
+            {{-- API usage --}}
+            <div class="rounded-lg bg-white p-5 shadow">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">{{ __('API calls (this month)') }}</div>
+                <div class="mt-1 text-lg font-bold text-gray-900">{{ $apiUsed }} / {{ $apiLimit ?? '∞' }}</div>
+                @php $apiPercent = $percent($apiUsed, $apiLimit); @endphp
+                @if ($apiPercent !== null)
+                    <div class="mt-2 h-2 rounded bg-gray-200">
+                        <div class="h-2 rounded {{ $barColour($apiPercent) }}" style="width: {{ $apiPercent }}%"></div>
+                    </div>
+                @else
+                    <div class="mt-1 text-sm text-gray-500">{{ __('Unlimited on your plan') }}</div>
+                @endif
+            </div>
+
+            {{-- Team seats --}}
+            <div class="rounded-lg bg-white p-5 shadow">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">{{ __('Team members') }}</div>
+                <div class="mt-1 text-lg font-bold text-gray-900">{{ $seatUsed }} / {{ $seatLimit ?? '∞' }}</div>
+                @php $seatPercent = $percent($seatUsed, $seatLimit); @endphp
+                @if ($seatPercent !== null)
+                    <div class="mt-2 h-2 rounded bg-gray-200">
+                        <div class="h-2 rounded {{ $barColour($seatPercent) }}" style="width: {{ $seatPercent }}%"></div>
+                    </div>
+                @else
+                    <div class="mt-1 text-sm text-gray-500">{{ __('Unlimited on your plan') }}</div>
+                @endif
+            </div>
+
+            {{-- Invoices --}}
+            <div class="rounded-lg bg-white p-5 shadow">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">{{ __('Invoices') }}</div>
+                <div class="mt-1 text-lg font-bold text-gray-900">{{ $recentInvoices->count() }}</div>
+                @if ($recentInvoices->first())
+                    <div class="mt-1 text-sm text-gray-500">
+                        {{ __('Latest') }}: {{ ucfirst($recentInvoices->first()->status) }}
+                    </div>
+                @else
+                    <div class="mt-1 text-sm text-gray-500">{{ __('No invoices yet.') }}</div>
+                @endif
             </div>
         </div>
 
-        <div class="grid md:grid-cols-2 gap-6">
-            <div class="bg-white rounded-lg shadow p-6">
-                <h3 class="font-semibold mb-3">Recent payments</h3>
-                <ul class="text-sm divide-y">
+        {{-- Recent activity --}}
+        <div class="grid gap-6 md:grid-cols-2">
+            <div class="rounded-lg bg-white p-6 shadow">
+                <h3 class="mb-3 font-semibold text-gray-900">{{ __('Recent payments') }}</h3>
+
+                <ul class="divide-y divide-gray-100 text-sm">
                     @forelse ($recentPayments as $p)
-                        <li class="py-2 flex justify-between">
-                            <span class="font-mono text-xs">{{ $p->order_id }}</span>
-                            <span>IDR {{ number_format($p->amount) }} — {{ ucfirst($p->status) }}</span>
+                        <li class="flex items-center justify-between gap-3 py-2">
+                            <span class="truncate font-mono text-xs text-gray-500">{{ $p->order_id }}</span>
+                            <span class="shrink-0 text-gray-700">IDR {{ number_format($p->amount) }}</span>
+                            <span class="shrink-0 rounded-full px-2 py-0.5 text-xs {{ ($p->status ?? '') === 'paid' ? 'bg-green-100 text-green-700' : (($p->status ?? '') === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600') }}">
+                                {{ ucfirst($p->status ?? 'unknown') }}
+                            </span>
                         </li>
                     @empty
-                        <li class="py-2 text-gray-500">No payments yet.</li>
+                        <li class="py-2 text-gray-500">{{ __('No payments yet.') }}</li>
                     @endforelse
                 </ul>
             </div>
 
-            <div class="bg-white rounded-lg shadow p-6">
-                <h3 class="font-semibold mb-3">Notifications</h3>
-                <ul class="text-sm divide-y">
+            <div class="rounded-lg bg-white p-6 shadow">
+                <h3 class="mb-3 font-semibold text-gray-900">{{ __('Notifications') }}</h3>
+
+                <ul class="divide-y divide-gray-100 text-sm">
                     @forelse ($notifications as $n)
-                        <li class="py-2">{{ $n->data['message'] ?? 'Notification' }}
-                            <span class="text-gray-400 text-xs block">{{ $n->created_at->diffForHumans() }}</span></li>
+                        <li class="py-2 text-gray-700">
+                            {{ $n->data['message'] ?? __('Notification') }}
+                            <span class="block text-xs text-gray-400">{{ $n->created_at->diffForHumans() }}</span>
+                        </li>
                     @empty
-                        <li class="py-2 text-gray-500">Nothing new.</li>
+                        <li class="py-2 text-gray-500">{{ __('Nothing new.') }}</li>
                     @endforelse
                 </ul>
             </div>

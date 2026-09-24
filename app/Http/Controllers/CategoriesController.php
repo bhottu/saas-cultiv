@@ -6,7 +6,6 @@ use App\Services\AuditLogger;
 use App\Models\Category;
 use App\Services\BusinessAuthorization;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Category CRUD (tenant-scoped).
@@ -35,13 +34,10 @@ class CategoriesController extends Controller
     {
         $this->auth->authorize('categories.create');
 
-        $tenant = request()->user()->currentTenant;
-
         return view('categories.form', [
             'category' => new Category(),
-            'maxPosition' => Category::where('tenant_id', $tenant->id)->max('position') ?? 0,
-            'availableParents' => Category::where('tenant_id', $tenant->id)->get(),
             'pageTitle' => 'Add Category',
+            'submitUrl' => route('categories.store'),
         ]);
     }
 

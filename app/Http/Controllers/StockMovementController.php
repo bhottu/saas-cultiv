@@ -30,23 +30,23 @@ class StockMovementController extends Controller
             ->where('tenant_id', $tenant->id);
 
         if ($request->filled('product_id')) {
-            $query->where('product_id', (int) $request->getString('product_id'));
+            $query->where('product_id', $request->integer('product_id'));
         }
 
         if ($request->filled('warehouse_id')) {
-            $query->where('warehouse_id', (int) $request->getString('warehouse_id'));
+            $query->where('warehouse_id', $request->integer('warehouse_id'));
         }
 
         if ($request->filled('type')) {
-            $query->where('type', $request->getString('type'));
+            $query->where('type', $request->string('type')->toString());
         }
 
         if ($request->filled('from')) {
-            $query->whereDate('created_at', '>=', $request->getString('from'));
+            $query->whereDate('created_at', '>=', $request->string('from')->toString());
         }
 
         if ($request->filled('to')) {
-            $query->whereDate('created_at', '<=', $request->getString('to'));
+            $query->whereDate('created_at', '<=', $request->string('to')->toString());
         }
 
         $movements = $query->latest('created_at')->paginate(50);

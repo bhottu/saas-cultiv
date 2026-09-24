@@ -19,7 +19,7 @@ class BusinessInvoicesController extends Controller
         $query = BusinessInvoice::with(['customer', 'sale', 'supplier', 'purchase']);
 
         if ($request->filled('type')) {
-            $type = $request->getString('type');
+            $type = $request->string('type')->toString();
             if ($type === 'sale') {
                 $query = $query->whereNotNull('sale_id');
             } elseif ($type === 'purchase') {
@@ -30,15 +30,15 @@ class BusinessInvoicesController extends Controller
         }
 
         if ($request->filled('status')) {
-            $query->where('status', $request->getString('status'));
+            $query->where('status', $request->string('status')->toString());
         }
 
         if ($request->filled('from')) {
-            $query->whereDate('issued_at', '>=', $request->getString('from'));
+            $query->whereDate('issued_at', '>=', $request->string('from')->toString());
         }
 
         if ($request->filled('to')) {
-            $query->whereDate('issued_at', '<=', $request->getString('to'));
+            $query->whereDate('issued_at', '<=', $request->string('to')->toString());
         }
 
         $invoices = $query->latest('issued_at')->paginate(50);

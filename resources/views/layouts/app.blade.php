@@ -15,22 +15,23 @@
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body class="font-sans antialiased">
-        <div class="min-h-screen bg-gray-100">
+        <a href="#main-content"
+           class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-indigo-600 focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-white">
+            {{ __('Skip to content') }}
+        </a>
+
+        {{-- Shared application shell: sidebar + header are identical on every page, only the
+             page content (and the optional "header" slot) changes per module. --}}
+        <div x-data="{ sidebarOpen: false }" class="min-h-screen bg-gray-100">
             @include('layouts.navigation')
 
-            <!-- Page Heading -->
-            @isset($header)
-                <header class="bg-white shadow">
-                    <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-                        {{ $header }}
-                    </div>
-                </header>
-            @endisset
+            <div class="lg:pl-72">
+                @include('layouts.header')
 
-            <!-- Page Content -->
-            <main>
-                {{ $slot }}
-            </main>
+                <main id="main-content">
+                    {{ $slot }}
+                </main>
+            </div>
         </div>
     </body>
 </html>

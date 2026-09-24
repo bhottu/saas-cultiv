@@ -32,19 +32,19 @@ class PurchasesController extends Controller
         $query = Purchase::with(['supplier', 'createdBy']);
 
         if ($request->filled('status')) {
-            $query->where('status', $request->getString('status'));
+            $query->where('status', $request->string('status')->toString());
         }
 
         if ($request->filled('supplier_id')) {
-            $query->where('supplier_id', (int) $request->getString('supplier_id'));
+            $query->where('supplier_id', $request->integer('supplier_id'));
         }
 
         if ($request->filled('from')) {
-            $query->whereDate('ordered_at', '>=', $request->getString('from'));
+            $query->whereDate('ordered_at', '>=', $request->string('from')->toString());
         }
 
         if ($request->filled('to')) {
-            $query->whereDate('ordered_at', '<=', $request->getString('to'));
+            $query->whereDate('ordered_at', '<=', $request->string('to')->toString());
         }
 
         $purchases = $query->latest('ordered_at')->paginate(50);

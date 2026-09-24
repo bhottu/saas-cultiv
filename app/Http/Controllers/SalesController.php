@@ -56,19 +56,19 @@ class SalesController extends Controller
         $query = Sale::with(['customer', 'createdBy', 'invoice']);
 
         if ($request->filled('status')) {
-            $query->where('status', $request->getString('status'));
+            $query->where('status', $request->string('status')->toString());
         }
 
         if ($request->filled('customer_id')) {
-            $query->where('customer_id', (int) $request->getString('customer_id'));
+            $query->where('customer_id', $request->integer('customer_id'));
         }
 
         if ($request->filled('from')) {
-            $query->whereDate('sold_at', '>=', $request->getString('from'));
+            $query->whereDate('sold_at', '>=', $request->string('from')->toString());
         }
 
         if ($request->filled('to')) {
-            $query->whereDate('sold_at', '<=', $request->getString('to'));
+            $query->whereDate('sold_at', '<=', $request->string('to')->toString());
         }
 
         $sales = $query->latest('sold_at')->paginate(50);

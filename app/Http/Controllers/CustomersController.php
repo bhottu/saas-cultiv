@@ -23,7 +23,7 @@ class CustomersController extends Controller
         $query = Customer::where('tenant_id', $tenant->id);
 
         if ($request->filled('search')) {
-            $term = $request->getString('search');
+            $term = $request->string('search')->toString();
             $query->where(function ($q) use ($term) {
                 $q->where('name', 'like', "%{$term}%")
                     ->orWhere('phone', 'like', "%{$term}%")
@@ -43,7 +43,7 @@ class CustomersController extends Controller
 
         return view('customers.index', [
             'customers' => $customers,
-            'search' => $request->getString('search', ''),
+            'search' => $request->string('search')->toString(),
             'active_only' => $request->boolean('active_only'),
         ]);
     }

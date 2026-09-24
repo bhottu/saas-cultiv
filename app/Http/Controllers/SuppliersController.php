@@ -21,7 +21,7 @@ class SuppliersController extends Controller
         $query = Supplier::where('tenant_id', $tenant->id);
 
         if ($request->filled('search')) {
-            $term = $request->getString('search');
+            $term = $request->string('search')->toString();
             $query->where(function ($q) use ($term) {
                 $q->where('name', 'like', "%{$term}%")
                     ->orWhere('phone', 'like', "%{$term}%")
@@ -33,7 +33,7 @@ class SuppliersController extends Controller
 
         return view('suppliers.index', [
             'suppliers' => $suppliers,
-            'search' => $request->getString('search', ''),
+            'search' => $request->string('search')->toString(),
         ]);
     }
 
