@@ -43,14 +43,17 @@ class InventoryService
             $tenant, $product, $warehouseId, $type, $quantity,
             $createdById, $referenceType, $referenceId, $notes, $metadata
         ) {
-            $balance = StockBalance::firstOrCreate(
-                ['tenant_id' => $tenant->id, 'product_id' => $product->id, 'warehouse_id' => $warehouseId],
-                ['quantity' => 0, 'incoming' => 0, 'outgoing' => 0]
-            );
-
+            $balance = $this->ensureBalance($tenant, $product, $warehouseId);
             $balance = StockBalance::whereKey($balance->id)->lockForUpdate()->first();
 
-            $movement = StockMovement::create([
+            $outgoingTypes = ['sale', 'purchase_return', 'adjustment_out', 'transfer_out', 'damage', 'loss'];
+            if (in_array($type, $outgoingTypes, true) && $balance->quantity < $quantity) {
+                throw new InvalidArgumentException(
+                    "Insufficient stock for {$product->name} (need {$quantity}, have {$balance->quantity})."
+                );
+            }
+
+            $movementAttributes = [
                 'tenant_id'       => $tenant->id,
                 'product_id'      => $product->id,
                 'warehouse_id'    => $warehouseId,
@@ -60,13 +63,68 @@ class InventoryService
                 'reference_id'    => $referenceId,
                 'created_by'      => $createdById ?? $tenant->users()->first()?->id,
                 'notes'           => $notes,
-                'metadata'        => $metadata,
-            ]);
+            ];
+
+            // Leave the nullable JSON column out when there is no metadata. The
+            // StockMovement array cast is responsible for encoding the value.
+            if ($metadata !== []) {
+                $movementAttributes['metadata'] = $metadata;
+            }
+
+            $movement = StockMovement::create($movementAttributes);
 
             $this->applyToBalance($balance, $type, $quantity);
 
             return $movement;
         });
+    }
+
+    /**
+     * Guarantee the balance row for a product+warehouse exists (zero when brand new).
+     *
+     * Keeps stock_balances complete for every product that is stock-tracked, so a first
+     * movement never fails and a shortfall is reported as "insufficient stock" instead of
+     * "no stock balance found".
+     */
+    public function ensureBalance(Tenant $tenant, Product $product, int $warehouseId): StockBalance
+    {
+        return StockBalance::firstOrCreate(
+            ['tenant_id' => $tenant->id, 'product_id' => $product->id, 'warehouse_id' => $warehouseId],
+            ['quantity' => 0, 'incoming' => 0, 'outgoing' => 0]
+        );
+    }
+
+    /**
+     * Put goods back into stock (customer return, cancelled sale, returned purchase).
+     *
+     * The direction is decided by the movement type in applyToBalance(): a customer return
+     * ("sale_return") increases stock, while goods sent back to a supplier ("purchase_return")
+     * decrease it. Quantities are always positive — the movement type carries the direction,
+     * because stock_movements.quantity is an unsigned column.
+     */
+    public function return(
+        Tenant $tenant,
+        Product $product,
+        int $warehouseId,
+        int $quantity,
+        ?int $createdById = null,
+        string $referenceType = 'sale_return',
+        ?int $referenceId = null,
+        ?string $notes = null,
+    ): StockMovement {
+        $type = $referenceType === 'purchase_return' ? 'purchase_return' : 'sale_return';
+
+        return $this->apply(
+            $tenant,
+            $product,
+            $warehouseId,
+            $type,
+            abs($quantity),
+            $createdById,
+            $referenceType,
+            $referenceId,
+            $notes
+        );
     }
 
     /**
@@ -135,7 +193,7 @@ class InventoryService
     public function lowStockProducts(Tenant $tenant): \Illuminate\Database\Eloquent\Collection
     {
         return StockBalance::withoutGlobalScopes()
-            ->where('tenant_id', $tenant->id)
+            ->where('stock_balances.tenant_id', $tenant->id)
             ->join('products', 'stock_balances.product_id', '=', 'products.id')
             ->where('products.is_active', true)
             ->where('products.track_inventory', true)
@@ -166,9 +224,11 @@ class InventoryService
     private function applyToBalance(StockBalance $balance, string $type, int $quantity): void
     {
         match ($type) {
-            'purchase', 'purchase_return', 'adjustment_in', 'transfer_in', 'damage'
+            // Stock physically coming IN.
+            'purchase', 'sale_return', 'adjustment_in', 'transfer_in'
                 => $balance->incoming += $quantity,
-            'sale', 'sale_return', 'adjustment_out', 'transfer_out', 'loss'
+            // Stock physically leaving: a sale, goods returned to the supplier, damage/loss.
+            'sale', 'purchase_return', 'adjustment_out', 'transfer_out', 'damage', 'loss'
                 => $balance->outgoing += $quantity,
             default => throw new InvalidArgumentException("Unknown movement type: {$type}"),
         };

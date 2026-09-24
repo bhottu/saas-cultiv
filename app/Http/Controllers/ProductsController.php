@@ -7,8 +7,10 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Services\AuditLogger;
 use App\Services\BusinessAuthorization;
+use App\Services\InventoryService;
 use App\Services\Money;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 /**
@@ -22,7 +24,10 @@ use Illuminate\Validation\Rule;
  */
 class ProductsController extends Controller
 {
-    public function __construct(private readonly BusinessAuthorization $auth) {}
+    public function __construct(
+        private readonly BusinessAuthorization $auth,
+        private readonly InventoryService $inventory,
+    ) {}
 
     public function index(Request $request)
     {
@@ -88,7 +93,18 @@ class ProductsController extends Controller
 
         $validated = $request->validate($this->rules($tenantId));
 
-        $product = Product::create(array_merge($this->attributes($validated), ['tenant_id' => $tenantId]));
+        $product = DB::transaction(function () use ($request, $validated, $tenantId) {
+            $product = Product::create(array_merge($this->attributes($validated), ['tenant_id' => $tenantId]));
+
+            if ($product->track_inventory) {
+                $warehouse = $request->user()->currentTenant->warehouses()->active()->first();
+                if ($warehouse) {
+                    $this->inventory->ensureBalance($request->user()->currentTenant, $product, $warehouse->id);
+                }
+            }
+
+            return $product;
+        });
 
         AuditLogger::log('product.created', $product, ['name' => $product->name, 'sku' => $product->sku]);
 
@@ -133,7 +149,16 @@ class ProductsController extends Controller
 
         $validated = $request->validate($this->rules($this->tenantId($request), $product));
 
-        $product->update($this->attributes($validated));
+        DB::transaction(function () use ($request, $product, $validated) {
+            $product->update($this->attributes($validated));
+
+            if ($product->track_inventory) {
+                $warehouse = $request->user()->currentTenant->warehouses()->active()->first();
+                if ($warehouse) {
+                    $this->inventory->ensureBalance($request->user()->currentTenant, $product, $warehouse->id);
+                }
+            }
+        });
 
         AuditLogger::log('product.updated', $product, ['name' => $product->name, 'sku' => $product->sku]);
 

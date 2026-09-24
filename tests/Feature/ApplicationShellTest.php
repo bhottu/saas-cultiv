@@ -67,6 +67,7 @@ class ApplicationShellTest extends TestCase
         $pages = [
             '/dashboard',
             '/products',
+            '/stock',
             '/categories',
             '/categories/create',
             '/brands',
@@ -96,6 +97,7 @@ class ApplicationShellTest extends TestCase
         $routes = [
             '/dashboard' => 'dashboard',
             '/products' => 'products.index',
+            '/stock' => 'stock.index',
             '/categories' => 'categories.index',
             '/categories/create' => 'categories.index',
             '/brands' => 'brands.index',
@@ -129,7 +131,7 @@ class ApplicationShellTest extends TestCase
         $sidebar = $this->sidebar('/dashboard');
 
         // Routes exist for these modules, but their views do not — they must not be linked.
-        foreach (['sales.index', 'purchases.index', 'customers.index', 'suppliers.index', 'stock.index'] as $routeName) {
+        foreach (['purchases.index', 'suppliers.index'] as $routeName) {
             $this->assertStringNotContainsString(
                 'href="'.route($routeName).'"',
                 $sidebar,
@@ -138,7 +140,8 @@ class ApplicationShellTest extends TestCase
         }
 
         foreach ([
-            'products.index', 'categories.index', 'brands.index',
+            'products.index', 'stock.index', 'categories.index', 'brands.index',
+            'sales.index', 'customers.index',
             'files.index', 'team.index', 'billing.index', 'tenants.index',
             'profile.edit', 'tokens.index',
         ] as $routeName) {

@@ -5,9 +5,9 @@
     // * Items are gated by the EXISTING authorization stack (TenantContext + the
     //   business permission registry) — no second RBAC is introduced. Hiding an item
     //   is a UI concern only: the controllers keep enforcing authorization server-side.
-    // * Modules that have routes but no view yet (sales, purchases, customers,
-    //   suppliers, stock, ...) are deliberately NOT linked, so no menu entry ever
-    //   leads to a missing view.
+    // * Modules that have routes but no view yet (purchases, suppliers, ...) are
+    //   deliberately NOT linked, so no menu entry ever leads to a missing view. Sales,
+    //   customers, and stock DO have views and are linked below.
     $ctx = app('tenant.context');
     $business = app(\App\Services\BusinessAuthorization::class);
     $shellUser = Auth::user();
@@ -35,6 +35,15 @@
         ];
     }
 
+    if ($business->can('inventory.view')) {
+        $inventory[] = [
+            'label' => __('Stock'),
+            'icon' => 'folder',
+            'href' => route('stock.index'),
+            'active' => request()->routeIs('stock.*'),
+        ];
+    }
+
     if ($business->can('categories.view')) {
         $inventory[] = [
             'label' => __('Categories'),
@@ -50,6 +59,49 @@
             'icon' => 'bookmark',
             'href' => route('brands.index'),
             'active' => request()->routeIs('brands.*'),
+        ];
+    }
+
+    // Sales: orders, returns and the sales dashboard. The report is financial, so it follows
+    // the existing reports permission instead of the sales read/write verbs.
+    $sales = [];
+
+    if ($business->can('sales.view')) {
+        $sales[] = [
+            'label' => __('Sales'),
+            'icon' => 'shopping-cart',
+            'href' => route('sales.index'),
+            'active' => request()->routeIs('sales.index', 'sales.create', 'sales.show', 'sales.print'),
+        ];
+        $sales[] = [
+            'label' => __('Sales dashboard'),
+            'icon' => 'home',
+            'href' => route('sales.dashboard'),
+            'active' => request()->routeIs('sales.dashboard'),
+        ];
+        $sales[] = [
+            'label' => __('Sales returns'),
+            'icon' => 'arrow-path',
+            'href' => route('sales.returns'),
+            'active' => request()->routeIs('sales.returns', 'sales.return'),
+        ];
+    }
+
+    if ($business->can('customers.view')) {
+        $sales[] = [
+            'label' => __('Customers'),
+            'icon' => 'users',
+            'href' => route('customers.index'),
+            'active' => request()->routeIs('customers.*'),
+        ];
+    }
+
+    if ($business->can('reports.view')) {
+        $sales[] = [
+            'label' => __('Sales report'),
+            'icon' => 'chart-bar',
+            'href' => route('sales.report'),
+            'active' => request()->routeIs('sales.report'),
         ];
     }
 
@@ -111,6 +163,7 @@
 
     $navGroups = array_values(array_filter([
         ['label' => __('Overview'), 'items' => $overview],
+        ['label' => __('Sales'), 'items' => $sales],
         ['label' => __('Inventory'), 'items' => $inventory],
         ['label' => __('Workspace'), 'items' => $workspaceItems],
         ['label' => __('Account'), 'items' => $account],

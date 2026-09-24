@@ -56,14 +56,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::resource('brands', BrandsController::class)->except(['show']);
         Route::resource('categories', CategoriesController::class)->except(['show']);
         Route::resource('customers', CustomersController::class)->except(['show']);
+        Route::get('/customers/{customer}', [CustomersController::class, 'show'])->name('customers.show');
         Route::resource('suppliers', SuppliersController::class)->except(['show']);
         Route::resource('purchases', PurchasesController::class)->only(['index', 'create', 'store', 'show', 'edit', 'update', 'destroy']);
         Route::post('/purchases/{purchase}/receive', [PurchasesController::class, 'receive'])->name('purchases.receive');
         Route::post('/purchases/{purchase}/cancel', [PurchasesController::class, 'cancel'])->name('purchases.cancel');
-        Route::resource('sales', SalesController::class);
+        // Sales. The report/dashboard/return screens are registered BEFORE the resource so
+        // "dashboard", "report" and "returns" are never parsed as a sale id.
+        Route::get('/sales/dashboard', [SalesController::class, 'dashboard'])->name('sales.dashboard');
+        Route::get('/sales/report', [SalesController::class, 'report'])->name('sales.report');
+        Route::get('/sales/returns', [SalesController::class, 'returns'])->name('sales.returns');
+        Route::resource('sales', SalesController::class)->only(['index', 'create', 'store', 'show']);
+        Route::get('/sales/{sale}/print', [SalesController::class, 'invoice'])->name('sales.print');
         Route::post('/sales/{sale}/complete', [SalesController::class, 'complete'])->name('sales.complete');
         Route::post('/sales/{sale}/cancel', [SalesController::class, 'cancel'])->name('sales.cancel');
         Route::post('/sales/{sale}/refund', [SalesController::class, 'refund'])->name('sales.refund');
+        Route::get('/sales/{sale}/return', [SalesController::class, 'returnForm'])->name('sales.return');
+        Route::post('/sales/{sale}/return', [SalesController::class, 'storeReturn'])->name('sales.return.store');
 
         // Stock — custom, not a REST resource.
         Route::get('/stock', [StockController::class, 'index'])->name('stock.index');

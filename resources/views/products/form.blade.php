@@ -97,14 +97,22 @@
             {{-- Pricing (stored as cents) --}}
             <div class="grid gap-4 md:grid-cols-3">
                 <div>
-                    <x-input-label for="purchase_price" :value="__('Purchase price')" />
+                    <div class="flex items-center gap-1">
+                        <x-input-label for="purchase_price" :value="__('Purchase price')" />
+                        <x-help-tooltip id="purchase-price-help" :label="__('Purchase price')"
+                                        :text="__('The price you pay when buying the product from a supplier, e.g. :example.', ['example' => \App\Services\Money::format(2_000_000, 'IDR', false)])" />
+                    </div>
                     <x-text-input id="purchase_price" name="purchase_price" type="number" step="0.01" min="0"
                                   class="mt-1 block w-full" :value="old('purchase_price', $amount($product->purchase_price))" />
                     <x-input-error :messages="$errors->get('purchase_price')" class="mt-2" />
                 </div>
 
                 <div>
-                    <x-input-label for="cost_price" :value="__('Cost price')" />
+                    <div class="flex items-center gap-1">
+                        <x-input-label for="cost_price" :value="__('Cost price')" />
+                        <x-help-tooltip id="cost-price-help" :label="__('Cost price')"
+                                        :text="__('The cost of goods for this product once related costs are taken into account, e.g. :example.', ['example' => \App\Services\Money::format(2_500_000, 'IDR', false)])" />
+                    </div>
                     <x-text-input id="cost_price" name="cost_price" type="number" step="0.01" min="0"
                                   class="mt-1 block w-full" :value="old('cost_price', $amount($product->cost_price))" />
                     <p class="text-xs text-gray-500 mt-1">{{ __('Defaults to the purchase price.') }}</p>
@@ -112,7 +120,11 @@
                 </div>
 
                 <div>
-                    <x-input-label for="selling_price" :value="__('Selling price')" />
+                    <div class="flex items-center gap-1">
+                        <x-input-label for="selling_price" :value="__('Selling price')" />
+                        <x-help-tooltip id="selling-price-help" :label="__('Selling price')"
+                                        :text="__('The price you charge your customers, e.g. :example.', ['example' => \App\Services\Money::format(7_500_000, 'IDR', false)])" />
+                    </div>
                     <x-text-input id="selling_price" name="selling_price" type="number" step="0.01" min="0"
                                   class="mt-1 block w-full" :value="old('selling_price', $amount($product->selling_price))" />
                     <x-input-error :messages="$errors->get('selling_price')" class="mt-2" />

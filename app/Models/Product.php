@@ -31,7 +31,7 @@ class Product extends Model
     public function currentStock(int $warehouseId = null): int
     {
         $warehouseId ??= $this->tenant?->settings['default_warehouse_id']
-            ?? $this->warehouses()->first()?->id;
+            ?? $this->tenant?->warehouses()->first()?->id;
 
         if (! $warehouseId) {
             return 0;

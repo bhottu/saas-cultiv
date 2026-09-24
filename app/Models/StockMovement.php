@@ -20,6 +20,7 @@ class StockMovement extends Model
     protected $casts = [
         'quantity' => 'integer',
         'created_at' => 'datetime',
+        'metadata' => 'array',
     ];
 
     public function product(): BelongsTo

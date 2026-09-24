@@ -52,6 +52,24 @@ class Tenant extends Model
         return $this->hasMany(\App\Models\FileEntry::class);
     }
 
+    /** Warehouses / stock locations of this tenant (used by the stock and sales modules). */
+    public function warehouses()
+    {
+        return $this->hasMany(Warehouse::class);
+    }
+
+    /** Customers of this tenant (tenant-owned master data for sales). */
+    public function customers()
+    {
+        return $this->hasMany(Customer::class);
+    }
+
+    /** Sales documents of this tenant. */
+    public function sales()
+    {
+        return $this->hasMany(Sale::class);
+    }
+
     public function activeSubscription()
     {
         return $this->hasOne(Subscription::class)

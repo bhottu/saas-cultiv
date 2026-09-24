@@ -38,9 +38,6 @@ return new class extends Migration
             $table->index(['tenant_id', 'category_id']);
             $table->index(['tenant_id', 'name']);
 
-            // SQLite FK enforcement during tests.
-            $table->foreign('category_id')->references('id')->on('categories');
-            $table->foreign('brand_id')->references('id')->on('brands');
         });
     }
 

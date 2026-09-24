@@ -3,16 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Services\AuditLogger;
-use App\Models\Product;
-use App\Models\Category;
-use App\Models\Brand;
+use App\Services\BusinessUsageService;
 use App\Models\Customer;
 use App\Services\BusinessAuthorization;
+use App\Services\Money;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class CustomersController extends Controller
 {
-    public function __construct(private readonly BusinessAuthorization $auth) {}
+    public function __construct(
+        private readonly BusinessAuthorization $auth,
+        private readonly BusinessUsageService $usage,
+    ) {}
 
     public function index(Request $request)
     {
@@ -52,16 +55,23 @@ class CustomersController extends Controller
     {
         $this->auth->authorize('customers.create');
 
-        return view('customers.form', ['customer' => new Customer(), 'pageTitle' => 'Add Customer']);
+        return view('customers.form', [
+            'customer'  => new Customer(['is_active' => true]),
+            'pageTitle' => 'Add Customer',
+            'submitUrl' => route('customers.store'),
+        ]);
     }
 
     public function store(Request $request)
     {
         $this->auth->authorize('customers.create');
 
+        $tenant = $request->user()->currentTenant;
+
         $validated = $request->validate([
+            'form_context' => 'nullable|in:sales_create',
             'name' => 'required|string|max:255',
-            'phone' => 'nullable|string|max:50',
+            'phone' => 'required_if:form_context,sales_create|nullable|string|max:50',
             'email' => 'nullable|email|max:255',
             'address' => 'nullable|string|max:255',
             'notes' => 'nullable|string|max:65535',
@@ -69,11 +79,57 @@ class CustomersController extends Controller
             'is_active' => 'boolean',
         ]);
 
-        Customer::create(array_merge($validated, ['tenant_id' => $this->tenantId($request)]));
+        if (! empty($validated['phone']) && Customer::withoutGlobalScopes()
+            ->where('tenant_id', $this->tenantId($request))
+            ->where('phone', $validated['phone'])
+            ->where('name', $validated['name'])
+            ->exists()) {
+            throw ValidationException::withMessages([
+                'phone' => 'A customer with this name and phone already exists.',
+            ]);
+        }
 
-        AuditLogger::log('customer.created', Customer::latest('id')->first(), ['name' => $validated['name']]);
+        unset($validated['form_context']);
+
+        // Metered plan limit (same metering the products/sales modules use).
+        $this->usage->enforce($tenant, 'customers_count');
+
+        $customer = Customer::create(array_merge($validated, [
+            'tenant_id'    => $this->tenantId($request),
+            // Same money convention as products: user-facing amount in, cents stored.
+            'credit_limit' => Money::centsFromDisplay($validated['credit_limit'] ?? 0),
+        ]));
+
+        $this->usage->recordMetric($tenant, 'customers_count');
+
+        AuditLogger::log('customer.created', $customer, ['name' => $validated['name']]);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'customer' => [
+                    'id'    => (int) $customer->id,
+                    'name'  => $customer->name,
+                    'phone' => $customer->phone,
+                ],
+            ], 201);
+        }
 
         return redirect()->route('customers.index')->with('status', ['type' => 'success', 'message' => 'Customer created.']);
+    }
+
+    /** Customer detail: lifetime metrics + purchase history (§8). */
+    public function show(Customer $customer)
+    {
+        $this->auth->authorize('customers.view');
+        $this->ensureOwned($customer);
+
+        return view('customers.show', [
+            'customer' => $customer,
+            'sales'    => $customer->sales()
+                ->with('items')
+                ->latest('sold_at')
+                ->paginate(25),
+        ]);
     }
 
     public function edit(Customer $customer)
@@ -81,7 +137,11 @@ class CustomersController extends Controller
         $this->auth->authorize('customers.update');
         $this->ensureOwned($customer);
 
-        return view('customers.form', ['customer' => $customer, 'pageTitle' => 'Edit Customer']);
+        return view('customers.form', [
+            'customer'  => $customer,
+            'pageTitle' => 'Edit Customer',
+            'submitUrl' => route('customers.update', $customer),
+        ]);
     }
 
     public function update(Request $request, Customer $customer)
@@ -99,7 +159,9 @@ class CustomersController extends Controller
             'is_active' => 'boolean',
         ]);
 
-        $customer->update($validated);
+        $customer->update(array_merge($validated, [
+            'credit_limit' => Money::centsFromDisplay($validated['credit_limit'] ?? 0),
+        ]));
 
         AuditLogger::log('customer.updated', $customer, ['name' => $customer->name]);
 
