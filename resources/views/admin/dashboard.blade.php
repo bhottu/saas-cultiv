@@ -24,7 +24,8 @@
 
         <div class="bg-white shadow rounded-lg p-6">
             <h3 class="font-semibold mb-3">Recent Webhook Events</h3>
-            <table class="w-full text-sm">
+            <div class="overflow-x-auto">
+                <table class="w-full min-w-[36rem] text-sm">
                 <tr class="text-left text-gray-500"><th class="py-1">Event</th><th>Status</th><th>Signature</th><th>When</th></tr>
                 @foreach ($webhookEvents as $event)
                     <tr class="border-t">
@@ -34,7 +35,8 @@
                         <td>{{ $event->created_at->diffForHumans() }}</td>
                     </tr>
                 @endforeach
-            </table>
+                </table>
+            </div>
         </div>
 
         <div class="bg-white shadow rounded-lg p-6">

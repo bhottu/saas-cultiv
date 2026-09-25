@@ -13,10 +13,17 @@ use Illuminate\Support\Str;
 
 class TenantController extends Controller
 {
+    public function __construct(private readonly UsageService $usage) {}
+
     public function index(Request $request)
     {
+        $user = $request->user();
+        $ownedCount = $user->ownedTenants()->where('status', 'active')->count();
+
         return view('tenants.index', [
-            'tenants' => $request->user()->tenants()->wherePivot('status', 'active')->get(),
+            'tenants' => $user->tenants()->wherePivot('status', 'active')->get(),
+            'ownedCount' => $ownedCount,
+            'workspaceLimit' => $this->usage->workspaceLimitFor($user),
         ]);
     }
 
@@ -27,6 +34,8 @@ class TenantController extends Controller
         ]);
 
         $tenant = \Illuminate\Support\Facades\DB::transaction(function () use ($request, $data) {
+            $this->usage->enforceWorkspaceCreation($request->user());
+
             $tenant = Tenant::create([
                 'name' => $data['name'],
                 'slug' => Str::slug($data['name']).'-'.Str::lower(Str::random(6)),

@@ -24,7 +24,7 @@
                         @csrf
                         <input type="hidden" name="plan" value="free">
                         <input type="hidden" name="cycle" value="monthly">
-                        <button class="text-sm text-red-600 underline">Downgrade to Free</button>
+                        <button class="text-sm text-red-600 underline" @disabled($subscription?->plan?->is_free_tier)>Downgrade to Free</button>
                     </form>
                 </div>
             @else
@@ -51,12 +51,22 @@
                         @if ($plan->price_monthly > 0)
                             Rp {{ number_format($plan->price_monthly) }}<span class="text-sm text-gray-500">/mo</span>
                         @else
-                            Free
+                            Rp 0<span class="text-sm text-gray-500">/mo</span>
                         @endif
                     </div>
-                    <ul class="text-sm text-gray-600 mb-4 flex-1">
-                        @foreach ($plan->features ?? [] as $f)
-                            <li>✓ {{ $f }}</li>
+                    <ul class="text-sm text-gray-600 mb-4 flex-1 space-y-1.5">
+                        <li>✓ {{ $plan->displayLimit('max_workspaces') }} Workspace{{ $plan->limit('max_workspaces') === 1 ? '' : 's' }}</li>
+                        <li>✓ {{ $plan->displayLimit('max_users') }} User{{ $plan->limit('max_users') === 1 ? '' : 's' }}</li>
+                        <li>✓ {{ $plan->displayLimit('max_products') }} Products</li>
+                        <li>✓ Unlimited Customers</li>
+                        <li>✓ Basic Sales</li>
+                        <li>✓ Basic Stock</li>
+                        <li>✓ Basic Purchase</li>
+                        <li>✓ Basic Reports</li>
+                        @foreach (($plan->features ?? []) as $f)
+                            @if (! in_array($f, ['1 Workspace', '3 Workspaces', '10 Workspaces', 'Unlimited Workspaces', '1 User', '5 Users', '15 Users', '50 Users', '100 Products', 'Unlimited Products', 'Unlimited Customers', 'Basic Sales', 'Basic Stock', 'Basic Purchase', 'Basic Reports'], true))
+                                <li>✓ {{ $f }}</li>
+                            @endif
                         @endforeach
                     </ul>
                     @if ($subscription?->plan_id !== $plan->id)
@@ -64,9 +74,7 @@
                             @csrf
                             <input type="hidden" name="plan" value="{{ $plan->slug }}">
                             <input type="hidden" name="cycle" value="monthly">
-                            <button class="w-full px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm">
-                                {{ $plan->price_monthly > 0 ? 'Subscribe' : 'Switch to Free' }}
-                            </button>
+                            <x-primary-button>{{ $plan->price_monthly > 0 ? 'Subscribe' : 'Switch to Free' }}</x-primary-button>
                         </form>
                     @endif
                 </div>
@@ -77,7 +85,8 @@
         <div class="grid md:grid-cols-2 gap-6">
             <div class="bg-white rounded-lg shadow p-6">
                 <h3 class="font-semibold mb-3">Invoices</h3>
-                <table class="w-full text-sm">
+                <div class="overflow-x-auto">
+                    <table class="w-full min-w-[28rem] text-sm">
                     @forelse ($invoices as $inv)
                         <tr class="border-t"><td class="py-1 font-mono text-xs">{{ $inv->invoice_number }}</td>
                             <td>IDR {{ number_format($inv->amount) }}</td>
@@ -85,11 +94,13 @@
                     @empty
                         <tr><td class="text-gray-500 py-2">No invoices yet.</td></tr>
                     @endforelse
-                </table>
+                    </table>
+                </div>
             </div>
             <div class="bg-white rounded-lg shadow p-6">
                 <h3 class="font-semibold mb-3">Payment history</h3>
-                <table class="w-full text-sm">
+                <div class="overflow-x-auto">
+                    <table class="w-full min-w-[28rem] text-sm">
                     @forelse ($payments as $pay)
                         <tr class="border-t"><td class="py-1 font-mono text-xs">{{ $pay->order_id }}</td>
                             <td>IDR {{ number_format($pay->amount) }}</td>
@@ -97,7 +108,8 @@
                     @empty
                         <tr><td class="text-gray-500 py-2">No payments yet.</td></tr>
                     @endforelse
-                </table>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

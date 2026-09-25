@@ -11,8 +11,9 @@
         {{-- Seats --}}
         <div class="bg-white rounded-lg shadow p-4 text-sm flex justify-between items-center">
             <span class="font-semibold">Seats</span>
-            <span>{{ $activeCount }} / {{ $seatLimit ?? '∞' }} active
-                @if ($seatLimit !== null && $activeCount >= $seatLimit)
+            <span>
+                {{ $occupiedCount }} / {{ $seatLimit ?? '∞' }} seats
+                @if ($seatLimit !== null && $occupiedCount >= $seatLimit)
                     <span class="text-red-600">— limit reached, <a class="underline" href="{{ route('billing.index') }}">upgrade</a> to add more</span>
                 @endif
             </span>

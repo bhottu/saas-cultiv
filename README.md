@@ -53,6 +53,19 @@ Choose plan → Invoice created → QRIS.PW create-payment → pending (+expires
 | Schedules | `routes/console.php` (sweep, reminders, reconcile, purge) |
 | Tests | `tests/Feature/{QrisWebhookTest,MultiTenancyIsolationTest,SaasFlowSmokeTest,FileUploadTest}.php` |
 
+## Plans and limits
+
+Plans are database-driven and updated with `php artisan db:seed --class=PlanSeeder --force` (idempotent; it does not delete existing data):
+
+| Plan | Monthly | Workspaces | Users | Products | Advanced features |
+|---|---:|---:|---:|---:|---|
+| Free | Rp0 | 1 | 1 | 100 | Core business features |
+| Starter | Rp39.000 | 3 | 5 | Unlimited | Multi-user |
+| Pro | Rp79.000 | 10 | 15 | Unlimited | Advanced reports, permissions, audit log, analytics |
+| Business | Rp149.000 | Unlimited | 50 | Unlimited | All Pro features + API |
+
+Customers are unlimited on every plan. Workspace, seat, and product limits are checked in the backend before creation; existing over-limit records are preserved and are never deleted automatically. The upgrade prompt is a server-rendered `SubscriptionLimitException` flow, not a client-only button check.
+
 ## Environment (production)
 
 ```env

@@ -83,14 +83,14 @@ class SaasFlowSmokeTest extends TestCase
 
         $usage = app(\App\Services\UsageService::class);
 
-        // Free plan allows 2 seats; 1 used (owner) → adding 1 more is allowed... let's exceed:
+        // Free plan allows one occupied seat; adding a second is rejected by the backend.
         $extra = User::create([
             'name' => 'Extra', 'email' => 'extra@test.dev',
             'password' => Hash::make('Password!234'), 'email_verified_at' => now(),
         ]);
         $tenant->users()->attach($extra->id, ['role' => 'Staff', 'status' => 'active', 'joined_at' => now()]);
 
-        // 2/2 seats used — UsageService::enforceSeat must abort with 429.
+        // One owner already occupies the only Free seat; enforceSeat must reject the second.
         $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
         app(\App\Services\UsageService::class)->enforceSeat($tenant->fresh());
     }

@@ -18,19 +18,29 @@
         @endif
 
         {{-- Create --}}
+        @if ($apiEnabled)
         <form method="POST" action="{{ route('tokens.store') }}" class="bg-white shadow rounded-lg p-6 flex gap-3">
             @csrf
             <input name="name" required maxlength="100" placeholder="Token name (e.g. CLI, Mobile app)"
                    class="flex-1 border-gray-300 rounded-lg shadow-sm text-sm">
             <button class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm">Create token</button>
         </form>
+        @else
+            <div class="rounded-lg border border-amber-300 bg-amber-50 p-5 text-sm text-amber-900">
+                <strong>API Access is available on the Business plan.</strong>
+                Upgrade your plan to create and use API tokens.
+                <a href="{{ route('billing.index') }}" class="ml-1 font-semibold underline">View Plans</a>
+            </div>
+        @endif
 
+        @if ($apiEnabled)
         {{-- Usage hint --}}
         <div class="bg-gray-50 border rounded-lg p-4 text-xs text-gray-600">
             <p class="font-semibold mb-1">Usage</p>
             <code class="block">curl -H "Authorization: Bearer &lt;token&gt;" -H "X-Tenant-Id: &lt;tenant&gt;" {{ config('app.url') }}/api/v1/usage</code>
             <p class="mt-1">Rate limit: 60 requests/minute. Quotas apply per plan (see <a class="underline" href="{{ route('billing.index') }}">billing</a>).</p>
         </div>
+        @endif
 
         {{-- List --}}
         <div class="bg-white shadow rounded-lg divide-y">

@@ -9,6 +9,7 @@ use App\Services\AuditLogger;
 use App\Services\BusinessAuthorization;
 use App\Services\InventoryService;
 use App\Services\Money;
+use App\Services\UsageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -27,6 +28,7 @@ class ProductsController extends Controller
     public function __construct(
         private readonly BusinessAuthorization $auth,
         private readonly InventoryService $inventory,
+        private readonly UsageService $usage,
     ) {}
 
     public function index(Request $request)
@@ -64,6 +66,8 @@ class ProductsController extends Controller
 
         return view('products.index', [
             'products' => $query->orderBy('name')->paginate(50)->withQueryString(),
+            'productUsage' => $this->usage->usage($tenant, 'max_products'),
+            'productLimit' => $this->usage->limit($tenant, 'max_products'),
             'categories' => Category::where('tenant_id', $tenant->id)->orderBy('name')->get(),
             'brands' => Brand::where('tenant_id', $tenant->id)->orderBy('name')->get(),
             'filters' => $request->only(['search', 'category_id', 'brand_id', 'active_only', 'show_inactive']),
@@ -78,6 +82,8 @@ class ProductsController extends Controller
 
         return view('products.form', [
             'product' => new Product(['unit' => 'pcs', 'track_inventory' => true, 'is_active' => true]),
+            'productUsage' => $this->usage->usage($tenant, 'max_products'),
+            'productLimit' => $this->usage->limit($tenant, 'max_products'),
             'categories' => Category::where('tenant_id', $tenant->id)->orderBy('name')->get(),
             'brands' => Brand::where('tenant_id', $tenant->id)->orderBy('name')->get(),
             'pageTitle' => 'Add Product',
@@ -94,6 +100,13 @@ class ProductsController extends Controller
         $validated = $request->validate($this->rules($tenantId));
 
         $product = DB::transaction(function () use ($request, $validated, $tenantId) {
+            // Lock + count + insert share this outer transaction, preventing a concurrent
+            // request from creating product #101 when the Free limit is already 100.
+            $this->usage->enforce(
+                $request->user()->currentTenant,
+                'max_products'
+            );
+
             $product = Product::create(array_merge($this->attributes($validated), ['tenant_id' => $tenantId]));
 
             if ($product->track_inventory) {
@@ -137,6 +150,8 @@ class ProductsController extends Controller
             'product' => $product,
             'categories' => Category::where('tenant_id', $tenant->id)->orderBy('name')->get(),
             'brands' => Brand::where('tenant_id', $tenant->id)->orderBy('name')->get(),
+            'productUsage' => $this->usage->usage($tenant, 'max_products'),
+            'productLimit' => $this->usage->limit($tenant, 'max_products'),
             'pageTitle' => 'Edit Product',
             'submitUrl' => route('products.update', $product),
         ]);

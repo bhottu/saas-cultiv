@@ -11,8 +11,12 @@ return [
     'active_states' => ['trialing', 'active', 'past_due'],
 
     'usage' => [
-        'storage_mb' => ['period' => 'forever', 'fallback' => 100],
-        'api_calls'  => ['period' => 'month',   'fallback' => 1000],
+        'max_workspaces' => ['period' => 'forever', 'fallback' => 1],
+        'max_users'     => ['period' => 'forever', 'fallback' => 1],
+        'max_products'  => ['period' => 'forever', 'fallback' => 100],
+        'max_customers' => ['period' => 'forever', 'fallback' => null],
+        'storage_mb'    => ['period' => 'forever', 'fallback' => 100],
+        'api_calls'     => ['period' => 'month',   'fallback' => 1000],
     ],
 
     // Secure file uploads (§18/§19). Never trust the client filename/extension alone.

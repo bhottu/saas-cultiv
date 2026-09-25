@@ -14,8 +14,7 @@ class EnsureTenantContext
     {
         $ctx = app(TenantContext::class);
 
-        if (Auth::check()) {
-            $user = $request->user();
+        if (($user = $request->user() ?? Auth::user()) !== null) {
 
             // Never trust the browser: validate that the tenant id belongs to this user.
             $tenantId = session('tenant_id') ?: $user->current_tenant_id;

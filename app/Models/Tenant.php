@@ -82,4 +82,10 @@ class Tenant extends Model
     {
         return $this->memberships()->where('status', 'active')->count();
     }
+
+    /** Active members plus pending invitations; every reserved seat consumes plan capacity. */
+    public function occupiedSeatCount(): int
+    {
+        return $this->memberships()->whereIn('status', ['active', 'invited'])->count();
+    }
 }

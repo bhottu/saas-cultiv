@@ -56,15 +56,20 @@
 
             {{-- API usage --}}
             <div class="rounded-lg bg-white p-5 shadow">
-                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">{{ __('API calls (this month)') }}</div>
-                <div class="mt-1 text-lg font-bold text-gray-900">{{ $apiUsed }} / {{ $apiLimit ?? '∞' }}</div>
-                @php $apiPercent = $percent($apiUsed, $apiLimit); @endphp
-                @if ($apiPercent !== null)
-                    <div class="mt-2 h-2 rounded bg-gray-200">
-                        <div class="h-2 rounded {{ $barColour($apiPercent) }}" style="width: {{ $apiPercent }}%"></div>
-                    </div>
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">{{ __('API access') }}</div>
+                @if ($apiEnabled)
+                    <div class="mt-1 text-lg font-bold text-gray-900">{{ $apiUsed }} / {{ $apiLimit ?? '∞' }}</div>
+                    @php $apiPercent = $percent($apiUsed, $apiLimit); @endphp
+                    @if ($apiPercent !== null)
+                        <div class="mt-2 h-2 rounded bg-gray-200">
+                            <div class="h-2 rounded {{ $barColour($apiPercent) }}" style="width: {{ $apiPercent }}%"></div>
+                        </div>
+                    @else
+                        <div class="mt-1 text-sm text-gray-500">{{ __('Unlimited API requests') }}</div>
+                    @endif
                 @else
-                    <div class="mt-1 text-sm text-gray-500">{{ __('Unlimited on your plan') }}</div>
+                    <div class="mt-1 text-sm text-gray-500">{{ __('Available on Business') }}</div>
+                    <a href="{{ route('billing.index') }}" class="mt-1 inline-block text-sm text-indigo-600 underline">{{ __('View plans') }}</a>
                 @endif
             </div>
 

@@ -24,9 +24,11 @@ class TeamController extends Controller
             'members' => $ctx->tenant()->memberships()->with('user')->orderBy('joined_at')->orderBy('id')->get(),
             'roles' => array_keys(config('permissions.roles')),
             'activeCount' => $ctx->tenant()->seatCount(),
+            'occupiedCount' => $ctx->tenant()->occupiedSeatCount(),
             'seatLimit' => $this->usage->limit($ctx->tenant(), 'max_users'),
             'canManageUsers' => $ctx->userCan('manage_users'),
-            'canManageRoles' => $ctx->userCan('manage_roles'),
+            'canManageRoles' => $ctx->userCan('manage_roles')
+                && $this->usage->allows($ctx->tenant(), 'advanced_permissions'),
         ]);
     }
 
@@ -39,28 +41,36 @@ class TeamController extends Controller
 
         $data = $request->validate([
             'email' => ['required', 'email', 'max:255'],
-            'role' => ['required', 'in:Admin,Manager,Staff,Viewer'], // Owner is never assignable here
+            'role' => ['required', 'in:Admin,Manager,Staff,Viewer'],
         ]);
 
         $tenant = $ctx->tenant();
         $user = User::where('email', $data['email'])->first();
 
+        if (in_array($data['role'], ['Admin', 'Manager'], true)) {
+            $this->usage->enforceFeature($tenant, 'advanced_permissions');
+        }
+
         if (! $user) {
             return back()->withErrors(['email' => 'No account with that email. Ask them to register first, then invite.']);
         }
 
-        if ($user->membershipIn($tenant)) {
-            return back()->withErrors(['email' => 'This user is already a member of this workspace.']);
+        if ($tenant->memberships()->where('user_id', $user->id)->exists()) {
+            return back()->withErrors(['email' => 'This user is already a member or has a pending invitation in this workspace.']);
         }
 
-        $membership = TenantUser::create([
-            'tenant_id' => $tenant->id,
-            'user_id' => $user->id,
-            'role' => $data['role'],
-            'status' => 'invited',
-            'invitation_token' => Str::random(40),
-            'invited_by' => $request->user()->id,
-        ]);
+        $membership = \Illuminate\Support\Facades\DB::transaction(function () use ($tenant, $user, $data, $request) {
+            $this->usage->enforceSeat($tenant);
+
+            return TenantUser::create([
+                'tenant_id' => $tenant->id,
+                'user_id' => $user->id,
+                'role' => $data['role'],
+                'status' => 'invited',
+                'invitation_token' => Str::random(40),
+                'invited_by' => $request->user()->id,
+            ]);
+        });
 
         $user->notify(new TeamInvitationNotification($membership));
         AuditLogger::log('user.invited', $membership, ['email' => $data['email'], 'role' => $data['role']]);
@@ -68,7 +78,7 @@ class TeamController extends Controller
         return back()->with('success', "Invitation sent to {$data['email']} ({$data['role']}).");
     }
 
-    /** Signed-link acceptance — server validates the invitee identity + seat limit. */
+    /** Signed-link acceptance — server validates the invitee identity. */
     public function accept(Request $request, TenantUser $membership)
     {
         abort_unless($membership->status === 'invited' && $membership->invitation_token, 404, 'Invitation not found.');
@@ -76,9 +86,8 @@ class TeamController extends Controller
 
         $tenant = $membership->tenant;
 
-        // Plan seat limit is enforced server-side at the moment of joining.
-        app(UsageService::class)->enforceSeat($tenant);
-
+        // The invitation already reserves capacity; activating that same membership does
+        // not consume another seat. Existing over-limit data is preserved, never deleted.
         $membership->update(['status' => 'active', 'joined_at' => now(), 'invitation_token' => null]);
         AuditLogger::log('user.joined', $membership, ['email' => $request->user()->email]);
 
@@ -95,6 +104,7 @@ class TeamController extends Controller
         $ctx = app('tenant.context');
         $ctx->check();
         $ctx->authorize('manage_roles');
+        $this->usage->enforceFeature($ctx->tenant(), 'advanced_permissions');
 
         $membership = TenantUser::findOrFail($membershipId);
         abort_unless($membership->tenant_id === $ctx->tenant()->id, 404);

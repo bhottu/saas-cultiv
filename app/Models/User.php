@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -33,6 +34,12 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->belongsToMany(Tenant::class, 'tenant_user')
             ->withPivot('role', 'status', 'joined_at')->withTimestamps();
+    }
+
+    /** Workspaces created/owned by this account; used only for account-level workspace limits. */
+    public function ownedTenants(): HasMany
+    {
+        return $this->hasMany(Tenant::class, 'owner_id');
     }
 
     public function memberships()

@@ -69,7 +69,8 @@
         {{-- Stock on hand --}}
         <div class="bg-white shadow rounded-lg p-6">
             <h3 class="font-semibold mb-3">{{ __('Stock on hand') }}</h3>
-            <table class="min-w-full text-sm divide-y divide-gray-200">
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-sm divide-y divide-gray-200">
                 <thead>
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                         <th class="py-2 pr-4">{{ __('Warehouse') }}</th>
@@ -101,12 +102,14 @@
                     </tfoot>
                 @endif
             </table>
+            </div>
         </div>
 
         {{-- Recent movements --}}
         <div class="bg-white shadow rounded-lg p-6">
             <h3 class="font-semibold mb-3">{{ __('Recent stock movements') }}</h3>
-            <table class="min-w-full text-sm divide-y divide-gray-200">
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-sm divide-y divide-gray-200">
                 <thead>
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                         <th class="py-2 pr-4">{{ __('Date') }}</th>
@@ -130,6 +133,7 @@
                     @endforelse
                 </tbody>
             </table>
+            </div>
         </div>
 
         {{-- Danger zone --}}

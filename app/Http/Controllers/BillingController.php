@@ -4,10 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Services\AuditLogger;
 use App\Models\Plan;
-use App\Models\Subscription;
 use App\Services\PaymentService;
 use App\Services\SubscriptionService;
-use App\Services\UsageService;
 use Illuminate\Http\Request;
 
 class BillingController extends Controller
@@ -50,6 +48,14 @@ class BillingController extends Controller
         $plan = Plan::where('slug', $data['plan'])->where('is_active', true)->firstOrFail();
         $tenant = $ctx->tenant();
 
+        // Annual prices were not part of the approved pricing. Keep the existing billing
+        // schema/cycle support, but reject it until a non-zero official annual price exists.
+        if ($data['cycle'] === 'yearly' && $plan->price_yearly <= 0) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'cycle' => 'Yearly billing is not available yet. Please choose monthly billing.',
+            ]);
+        }
+
         // Free tier switch: no payment needed.
         if ($plan->price_monthly <= 0 && $plan->price_yearly <= 0) {
             $this->subscriptions->switchToFree($tenant);
@@ -58,14 +64,8 @@ class BillingController extends Controller
             return redirect()->route('billing.index')->with('success', "Switched to {$plan->name}.");
         }
 
-        // First-time trial (if this plan allows it and tenant hasn't trialed).
-        if ($tenant->trial_ends_at === null && $plan->is_free_tier === false && $request->boolean('trial')) {
-            $this->subscriptions->startTrial($tenant, $plan);
-            \App\Services\AuditLogger::log('subscription.trial_started', $tenant, ['plan' => $plan->slug]);
-
-            return redirect()->route('dashboard')->with('success', "Trial started: {$plan->name}.");
-        }
-
+        // Paid subscriptions always use the existing invoice + QRIS.PW payment flow.
+        // A browser must not be able to activate a paid plan by appending ?trial=1.
         // Otherwise create invoice + QRIS payment.
         $payment = $this->payments->createCheckout($tenant, $plan, $data['cycle'], $request->user());
 

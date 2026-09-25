@@ -9,6 +9,7 @@
     @php
         // Prices are stored as cents; inputs show the user-facing amount.
         $amount = fn ($cents) => $cents ? number_format($cents / 100, 2, '.', '') : '';
+        $atProductLimit = ! $product->exists && $productLimit !== null && $productUsage >= $productLimit;
     @endphp
 
     <div class="py-12 max-w-4xl mx-auto sm:px-6 lg:px-8 space-y-6">
@@ -22,6 +23,13 @@
             </div>
         @endif
 
+        @if ($atProductLimit)
+            <div class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" role="alert">
+                <strong>Product limit reached.</strong>
+                Your current plan allows {{ $productLimit }} products. Existing products remain available.
+                <a href="{{ route('billing.index') }}" class="font-semibold underline">View Plans</a>
+            </div>
+        @else
         <form method="POST" action="{{ $submitUrl }}" class="bg-white shadow rounded-lg p-6 space-y-6">
             @csrf
             @if ($product->exists)
@@ -172,5 +180,6 @@
                 <a href="{{ route('products.index') }}" class="text-sm text-gray-600 underline">{{ __('Cancel') }}</a>
             </div>
         </form>
+        @endif
     </div>
 </x-app-layout>

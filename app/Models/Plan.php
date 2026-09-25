@@ -28,13 +28,50 @@ class Plan extends Model
         return $cycle === 'yearly' ? $this->price_yearly : $this->price_monthly;
     }
 
-    /** Entitlement limit for a metric; null means unlimited. Accepts 'storage_mb' or 'max_storage_mb'. */
+    /**
+     * Numeric entitlement limit. A present null value is deliberately unlimited;
+     * it must not fall through to a configured default.
+     */
     public function limit(string $metric): ?int
     {
-        $value = $this->entitlements[$metric]
-            ?? $this->entitlements["max_{$metric}"]
-            ?? config("saas.usage.{$metric}.fallback");
+        $entitlements = $this->entitlements ?? [];
+        $aliases = [
+            'workspaces' => 'max_workspaces',
+            'products_count' => 'max_products',
+            'customers_count' => 'max_customers',
+            'api_calls' => 'max_api_calls',
+            'storage_mb' => 'max_storage_mb',
+        ];
+        $key = $aliases[$metric] ?? $metric;
 
-        return $value;
+        // Accept the historical entitlement keys as well as the canonical max_* names.
+        $keys = array_values(array_unique([$metric, $key, str_starts_with($key, 'max_') ? $key : "max_{$key}"]));
+        foreach ($keys as $candidate) {
+            if (array_key_exists($candidate, $entitlements)) {
+                return $entitlements[$candidate] === null ? null : (int) $entitlements[$candidate];
+            }
+        }
+
+        $fallbackMetric = match ($key) {
+            'max_storage_mb' => 'storage_mb',
+            'max_api_calls' => 'api_calls',
+            default => $key,
+        };
+        $fallback = config("saas.usage.{$fallbackMetric}.fallback");
+
+        return $fallback === null ? null : (int) $fallback;
+    }
+
+    /** Whether a non-resource feature (reports, API, audit, etc.) is included. */
+    public function allows(string $feature): bool
+    {
+        return (bool) (($this->entitlements ?? [])[$feature] ?? false);
+    }
+
+    public function displayLimit(string $metric): string
+    {
+        $limit = $this->limit($metric);
+
+        return $limit === null ? 'Unlimited' : number_format($limit);
     }
 }

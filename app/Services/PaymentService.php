@@ -24,6 +24,12 @@ class PaymentService
     /** Create invoice + pending QRIS payment for a plan checkout. */
     public function createCheckout(Tenant $tenant, Plan $plan, string $cycle, $user): Payment
     {
+        if ($cycle === 'yearly' && $plan->price_yearly <= 0) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'cycle' => 'Yearly billing is not available yet. Please choose monthly billing.',
+            ]);
+        }
+
         $amount = $plan->priceFor($cycle);
 
         $invoice = Invoice::create([

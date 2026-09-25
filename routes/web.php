@@ -40,7 +40,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Team management (invite/roles/remove).
         Route::get('/team', [TeamController::class, 'index'])->name('team.index');
         Route::post('/team/invite', [TeamController::class, 'invite'])->name('team.invite');
-        Route::patch('/team/{membership}/role', [TeamController::class, 'updateRole'])->name('team.role');
+        Route::patch('/team/{membership}/role', [TeamController::class, 'updateRole'])
+            ->middleware('plan.feature:advanced_permissions')
+            ->name('team.role');
         Route::delete('/team/{membership}', [TeamController::class, 'remove'])->name('team.remove');
 
         Route::middleware('throttle:billing')->group(function () {
@@ -92,10 +94,12 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    // API tokens (Sanctum) — per-user, not tenant-scoped.
-    Route::get('/tokens', [ApiTokenController::class, 'index'])->name('tokens.index');
-    Route::post('/tokens', [ApiTokenController::class, 'store'])->name('tokens.store');
-    Route::delete('/tokens/{token}', [ApiTokenController::class, 'destroy'])->name('tokens.destroy');
+    // API tokens remain user-owned, but entitlement checks require an active workspace.
+    Route::middleware('tenant')->group(function () {
+        Route::get('/tokens', [ApiTokenController::class, 'index'])->name('tokens.index');
+        Route::post('/tokens', [ApiTokenController::class, 'store'])->name('tokens.store');
+        Route::delete('/tokens/{token}', [ApiTokenController::class, 'destroy'])->name('tokens.destroy');
+    });
 
     // Team invitation acceptance — signed URL, outside the tenant group
     // because the invitee may not have a valid tenant context yet.

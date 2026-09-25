@@ -3,21 +3,46 @@
         <div class="flex items-center justify-between">
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ __('Products') }}</h2>
             <a href="{{ route('products.create') }}"
-               class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">
-                {{ __('Add product') }}
+               @if ($productLimit !== null && $productUsage >= $productLimit)
+                   aria-disabled="true" tabindex="-1" class="pointer-events-none inline-flex items-center px-4 py-2 bg-gray-400 text-white text-sm font-medium rounded-lg cursor-not-allowed"
+               @else
+                   class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700"
+               @endif>
+                {{ ($productLimit !== null && $productUsage >= $productLimit) ? 'Product limit reached' : __('Add product') }}
             </a>
         </div>
     </x-slot>
 
     <div class="py-12 max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
         @if (session('status'))
-            @php $status = session('status'); @endphp
             <div class="p-3 rounded {{ ($status['type'] ?? 'success') === 'error' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800' }}">
                 {{ $status['message'] ?? '' }}
             </div>
         @endif
 
-        {{-- Filters --}}
+
+
+
+
+
+
+
+
+
+
+
+
+        @php $atProductLimit = $productLimit !== null && $productUsage >= $productLimit; @endphp
+        @if ($atProductLimit)
+            <div class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" role="alert">
+                <strong>Product limit reached.</strong>
+                Your current plan allows {{ $productLimit }} products. Existing products remain available.
+                <a href="{{ route('billing.index') }}" class="font-semibold underline">View Plans</a>
+            </div>
+        @endif
+
+         {{-- Filters --}}
+
         <form method="GET" action="{{ route('products.index') }}"
               class="bg-white shadow rounded-lg p-6 grid gap-4 md:grid-cols-4">
             <div class="md:col-span-2">

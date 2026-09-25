@@ -9,7 +9,7 @@ Route::post('/webhooks/qris', [WebhookController::class, 'qris'])
     ->name('webhooks.qris');
 
 // Versioned API (Sanctum personal access tokens).
-Route::prefix('v1')->middleware(['auth:sanctum', 'throttle:api'])->group(function () {
+Route::prefix('v1')->middleware(['auth:sanctum', 'tenant', 'plan.feature:api_access', 'throttle:api'])->group(function () {
     Route::get('/me', fn (\Illuminate\Http\Request $r) => response()->json([
         'id' => $r->user()->id,
         'name' => $r->user()->name,

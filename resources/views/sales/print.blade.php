@@ -102,7 +102,8 @@
             </div>
 
             {{-- Items --}}
-            <table class="mt-6 w-full text-sm">
+            <div class="overflow-x-auto">
+                <table class="mt-6 w-full min-w-[36rem] text-sm">
                 <thead>
                     <tr class="border-b border-gray-200 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                         <th class="pb-2">{{ __('Product') }}</th>
@@ -126,7 +127,8 @@
                         </tr>
                     @endforeach
                 </tbody>
-            </table>
+                </table>
+            </div>
 
             {{-- Totals --}}
             <div class="mt-6 flex flex-col items-end">

@@ -88,6 +88,7 @@ class ApplicationShellTest extends TestCase
                 // Sidebar + mobile drawer share one navigation source.
                 ->assertSee('id="sidebar"', false)
                 ->assertSee('id="mobile-sidebar"', false)
+                ->assertSee('min-w-0 space-y-6 px-4 sm:px-0', false)
                 ->assertSee(__('Main navigation'))
                 // Shared brand: desktop sidebar and mobile drawer both use the same lockup.
                 ->assertSee('Cultiv One')

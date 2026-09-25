@@ -34,9 +34,16 @@
             <div class="lg:pl-72">
                 @include('layouts.header')
 
-                <main id="main-content">
-                    {{ $slot }}
-                </main>
+                {{-- One responsive content wrapper for every authenticated tenant page.
+                     Existing page-level max-widths keep desktop sizing intact; this
+                     wrapper supplies the missing mobile breathing room without
+                     double-padding desktop content. --}}
+                <div class="min-w-0 space-y-6 px-4 sm:px-0">
+                    <x-upgrade-required />
+                    <main id="main-content" class="min-w-0">
+                        {{ $slot }}
+                    </main>
+                </div>
             </div>
         </div>
     </body>
