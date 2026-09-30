@@ -88,7 +88,10 @@ class ApplicationShellTest extends TestCase
                 // Sidebar + mobile drawer share one navigation source.
                 ->assertSee('id="sidebar"', false)
                 ->assertSee('id="mobile-sidebar"', false)
-                ->assertSee('min-w-0 space-y-6 px-4 sm:px-0', false)
+                // The shared content wrapper. It no longer carries `space-y-6`: the
+                // upgrade banner used to stack that 24px on top of every page's own
+                // `py-12`, and the banner now brings its own top margin instead.
+                ->assertSee('min-w-0 px-4 sm:px-0', false)
                 ->assertSee(__('Main navigation'))
                 // Shared brand: desktop sidebar and mobile drawer both use the same lockup.
                 ->assertSee('Cultiv One')

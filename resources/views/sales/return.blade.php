@@ -67,6 +67,7 @@
                                 <td class="px-4 py-3">
                                     <input type="number" min="0" max="{{ $item->remainingQuantity() }}" step="1"
                                            name="quantities[{{ $item->id }}]" value="{{ old('quantities.'.$item->id, 0) }}"
+                                           placeholder="0"
                                            @disabled($item->remainingQuantity() === 0)
                                            class="block w-24 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-100">
                                 </td>
@@ -80,7 +81,8 @@
                 <div>
                     <x-input-label for="reason" :value="__('Reason')" />
                     <x-text-input id="reason" name="reason" type="text" class="mt-1 block w-full"
-                                  :value="old('reason', 'Customer return')" required />
+                                  :value="old('reason', 'Customer return')"
+                                  placeholder="{{ __('e.g. Damaged packaging') }}" required />
                     <x-input-error :messages="$errors->get('reason')" class="mt-2" />
                 </div>
 
@@ -98,6 +100,7 @@
                 <div class="md:col-span-2">
                     <x-input-label for="notes" :value="__('Notes')" />
                     <textarea id="notes" name="notes" rows="2"
+                              placeholder="{{ __('e.g. Refund given in cash') }}"
                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">{{ old('notes') }}</textarea>
                 </div>
 

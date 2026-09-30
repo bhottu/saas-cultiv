@@ -42,11 +42,20 @@ class TeamInvitationNotification extends Notification implements ShouldQueue
 
     public function toArray($notifiable): array
     {
+        $inviter = $this->membership->invitedBy?->name ?? 'Someone';
+        $tenant = $this->membership->tenant;
+
         return [
             'type' => 'team_invitation',
             'tenant_id' => $this->membership->tenant_id,
             'role' => $this->membership->role,
-            'message' => "You were invited to join {$this->membership->tenant->name} as {$this->membership->role}.",
+            'invited_by' => $inviter,
+            // Notification actions deep-link into the existing team surface, where
+            // the pending invitation (and its Accept/Reject buttons) lives. Keep the
+            // URL path-only: route() would bake the current APP_URL into stored
+            // notification data and break links behind the ngrok tunnel swap.
+            'url' => route('team.index', [], false),
+            'message' => "{$inviter} invited you to join {$tenant->name} as {$this->membership->role}.",
         ];
     }
 }

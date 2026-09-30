@@ -31,7 +31,7 @@ class PlanSeeder extends Seeder
                     'audit_log' => false,
                     'advanced_analytics' => false,
                 ],
-                'features' => ['1 Workspace', '1 User', '100 Products', 'Unlimited Customers', 'Basic Sales', 'Basic Stock', 'Basic Purchase', 'Basic Reports'],
+                'features' => ['1 Workspace', '1 User', '100 Products', 'Unlimited Customers', 'Sales Management', 'Inventory Management', 'Purchase Management', 'Standard Reports'],
                 'is_active' => true, 'is_free_tier' => true, 'sort_order' => 1,
             ],
             [
@@ -55,7 +55,7 @@ class PlanSeeder extends Seeder
                     'audit_log' => false,
                     'advanced_analytics' => false,
                 ],
-                'features' => ['3 Workspaces', '5 Users', 'Unlimited Products', 'Unlimited Customers', 'Basic Sales', 'Basic Stock', 'Basic Purchase', 'Basic Reports', 'Multi-user'],
+                'features' => ['3 Workspaces', '5 Users', 'Unlimited Products', 'Unlimited Customers', 'Sales Management', 'Inventory Management', 'Purchase Management', 'Standard Reports', 'Multi-user'],
                 'is_active' => true, 'is_free_tier' => false, 'sort_order' => 2,
             ],
             [
@@ -79,7 +79,7 @@ class PlanSeeder extends Seeder
                     'audit_log' => true,
                     'advanced_analytics' => true,
                 ],
-                'features' => ['10 Workspaces', '15 Users', 'Unlimited Products', 'Unlimited Customers', 'Basic Sales', 'Basic Stock', 'Basic Purchase', 'Basic Reports', 'Advanced Reports', 'Advanced Permissions', 'Audit Log', 'Advanced Analytics'],
+                'features' => ['10 Workspaces', '15 Users', 'Unlimited Products', 'Unlimited Customers', 'Sales Management', 'Inventory Management', 'Purchase Management', 'Standard Reports', 'Advanced Reports', 'Advanced Permissions', 'Audit Log', 'Advanced Analytics'],
                 'is_active' => true, 'is_free_tier' => false, 'sort_order' => 3,
             ],
             [
@@ -103,7 +103,7 @@ class PlanSeeder extends Seeder
                     'audit_log' => true,
                     'advanced_analytics' => true,
                 ],
-                'features' => ['Unlimited Workspaces', '50 Users', 'Unlimited Products', 'Unlimited Customers', 'Basic Sales', 'Basic Stock', 'Basic Purchase', 'Basic Reports', 'Advanced Reports', 'Advanced Permissions', 'API', 'Audit Log', 'Advanced Analytics'],
+                'features' => ['Unlimited Workspaces', '50 Users', 'Unlimited Products', 'Unlimited Customers', 'Sales Management', 'Inventory Management', 'Purchase Management', 'Standard Reports', 'Advanced Reports', 'Advanced Permissions', 'API', 'Audit Log', 'Advanced Analytics'],
                 'is_active' => true, 'is_free_tier' => false, 'sort_order' => 4,
             ],
         ];

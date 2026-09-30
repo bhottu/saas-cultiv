@@ -41,21 +41,24 @@
                 <div class="md:col-span-2">
                     <x-input-label for="name" :value="__('Name')" />
                     <x-text-input id="name" name="name" type="text" class="mt-1 block w-full"
-                                  :value="old('name', $product->name)" required />
+                                  :value="old('name', $product->name)"
+                                  placeholder="{{ __('e.g. Kopi Arabika 250g') }}" required />
                     <x-input-error :messages="$errors->get('name')" class="mt-2" />
                 </div>
 
                 <div>
                     <x-input-label for="sku" :value="__('SKU')" />
                     <x-text-input id="sku" name="sku" type="text" class="mt-1 block w-full"
-                                  :value="old('sku', $product->sku)" />
+                                  :value="old('sku', $product->sku)"
+                                  placeholder="{{ __('e.g. SKU-KOPI-250') }}" />
                     <x-input-error :messages="$errors->get('sku')" class="mt-2" />
                 </div>
 
                 <div>
                     <x-input-label for="barcode" :value="__('Barcode')" />
                     <x-text-input id="barcode" name="barcode" type="text" class="mt-1 block w-full"
-                                  :value="old('barcode', $product->barcode)" />
+                                  :value="old('barcode', $product->barcode)"
+                                  placeholder="{{ __('e.g. 8991234567890') }}" />
                     <x-input-error :messages="$errors->get('barcode')" class="mt-2" />
                 </div>
 
@@ -97,6 +100,7 @@
                 <div class="md:col-span-2">
                     <x-input-label for="description" :value="__('Description')" />
                     <textarea id="description" name="description" rows="3"
+                              placeholder="{{ __('e.g. Roasted beans, 250 g pack') }}"
                               class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">{{ old('description', $product->description) }}</textarea>
                     <x-input-error :messages="$errors->get('description')" class="mt-2" />
                 </div>
@@ -111,7 +115,8 @@
                                         :text="__('The price you pay when buying the product from a supplier, e.g. :example.', ['example' => \App\Services\Money::format(2_000_000, 'IDR', false)])" />
                     </div>
                     <x-text-input id="purchase_price" name="purchase_price" type="number" step="0.01" min="0"
-                                  class="mt-1 block w-full" :value="old('purchase_price', $amount($product->purchase_price))" />
+                                  class="mt-1 block w-full" :value="old('purchase_price', $amount($product->purchase_price))"
+                                  placeholder="{{ __('e.g. 15000') }}" />
                     <x-input-error :messages="$errors->get('purchase_price')" class="mt-2" />
                 </div>
 
@@ -122,7 +127,8 @@
                                         :text="__('The cost of goods for this product once related costs are taken into account, e.g. :example.', ['example' => \App\Services\Money::format(2_500_000, 'IDR', false)])" />
                     </div>
                     <x-text-input id="cost_price" name="cost_price" type="number" step="0.01" min="0"
-                                  class="mt-1 block w-full" :value="old('cost_price', $amount($product->cost_price))" />
+                                  class="mt-1 block w-full" :value="old('cost_price', $amount($product->cost_price))"
+                                  placeholder="{{ __('e.g. 12000') }}" />
                     <p class="text-xs text-gray-500 mt-1">{{ __('Defaults to the purchase price.') }}</p>
                     <x-input-error :messages="$errors->get('cost_price')" class="mt-2" />
                 </div>
@@ -134,7 +140,8 @@
                                         :text="__('The price you charge your customers, e.g. :example.', ['example' => \App\Services\Money::format(7_500_000, 'IDR', false)])" />
                     </div>
                     <x-text-input id="selling_price" name="selling_price" type="number" step="0.01" min="0"
-                                  class="mt-1 block w-full" :value="old('selling_price', $amount($product->selling_price))" />
+                                  class="mt-1 block w-full" :value="old('selling_price', $amount($product->selling_price))"
+                                  placeholder="{{ __('e.g. 25000') }}" />
                     <x-input-error :messages="$errors->get('selling_price')" class="mt-2" />
                 </div>
             </div>
@@ -144,14 +151,16 @@
                 <div>
                     <x-input-label for="minimum_stock" :value="__('Minimum stock')" />
                     <x-text-input id="minimum_stock" name="minimum_stock" type="number" min="0"
-                                  class="mt-1 block w-full" :value="old('minimum_stock', $product->minimum_stock ?? 0)" />
+                                  class="mt-1 block w-full" :value="old('minimum_stock', $product->minimum_stock ?? 0)"
+                                  placeholder="{{ __('e.g. 5') }}" />
                     <x-input-error :messages="$errors->get('minimum_stock')" class="mt-2" />
                 </div>
 
                 <div>
                     <x-input-label for="max_stock" :value="__('Maximum stock')" />
                     <x-text-input id="max_stock" name="max_stock" type="number" min="0"
-                                  class="mt-1 block w-full" :value="old('max_stock', $product->max_stock)" />
+                                  class="mt-1 block w-full" :value="old('max_stock', $product->max_stock)"
+                                  placeholder="{{ __('e.g. 100') }}" />
                     <x-input-error :messages="$errors->get('max_stock')" class="mt-2" />
                 </div>
             </div>

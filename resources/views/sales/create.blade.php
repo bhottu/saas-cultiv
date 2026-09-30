@@ -24,7 +24,8 @@
              'canCreateCustomer' => (bool) $canCreateCustomer,
              'customerStoreUrl' => route('customers.store'),
              'taxPercent' => $taxPercent,
-         ]))">
+         ]))"
+         @barcode-scanned.window="addByCode($event.detail.code)">
         @if ($errors->any())
             <div class="rounded-lg bg-red-100 p-3 text-red-800">
                 <ul class="list-inside list-disc space-y-1 text-sm">
@@ -120,6 +121,7 @@
                 <div class="md:col-span-3">
                     <x-input-label for="notes" :value="__('Notes (optional)')" />
                     <textarea id="notes" name="notes" rows="2"
+                              placeholder="{{ __('e.g. Delivered by courier') }}"
                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">{{ old('notes') }}</textarea>
                     <x-input-error :messages="$errors->get('notes')" class="mt-2" />
                 </div>
@@ -127,13 +129,19 @@
 
             {{-- Line items --}}
             <div class="rounded-lg bg-white p-6 shadow">
-                <div class="flex items-center justify-between">
+                <div class="flex flex-wrap items-center justify-between gap-3">
                     <div class="text-sm font-semibold text-gray-800">{{ __('Products *') }}</div>
-                    <button type="button" @click="addRow()"
-                            class="rounded-lg border border-indigo-600 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-50">
-                        {{ __('Add product') }}
-                    </button>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <x-barcode-scanner-modal :label="__('Scan barcode')" />
+                        <button type="button" @click="addRow()"
+                                class="rounded-lg border border-indigo-600 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-50">
+                            {{ __('Add product') }}
+                        </button>
+                    </div>
                 </div>
+
+                <p x-show="scanError" x-cloak role="alert"
+                   class="mt-3 rounded-lg bg-red-100 px-3 py-2 text-sm text-red-800" x-text="scanError"></p>
 
                 <div class="mt-4 overflow-x-auto">
                     <table class="min-w-full text-sm">
@@ -168,11 +176,13 @@
                                     <td class="px-2 py-2">
                                         <input type="number" min="1" step="1" :name="`items[${index}][quantity]`"
                                                x-model.number="row.quantity"
+                                               placeholder="{{ __('Qty') }}"
                                                class="block w-20 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                                     </td>
                                     <td class="px-2 py-2">
                                         <input type="number" min="0" step="0.01" :name="`items[${index}][unit_price]`"
                                                x-model.number="row.unit_price"
+                                               placeholder="{{ __('Unit price') }}"
                                                class="block w-28 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                                     </td>
                                     <td class="px-2 py-2">
@@ -184,6 +194,7 @@
                                             </select>
                                             <input type="number" min="0" step="1" :name="`items[${index}][discount_value]`"
                                                    x-model.number="row.discount_value"
+                                                   placeholder="{{ __('Discount') }}"
                                                    class="block w-24 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                                         </div>
                                     </td>
@@ -220,7 +231,8 @@
                                     <option value="percent">%</option>
                                 </select>
                                 <x-text-input id="discount_value" name="discount_value" type="number" min="0" step="1"
-                                              class="block w-full" x-model.number="header.discount_value" />
+                                              class="block w-full" x-model.number="header.discount_value"
+                                              placeholder="{{ __('e.g. 1000') }}" />
                             </div>
                             <x-input-error :messages="$errors->get('discount_value')" class="mt-2" />
                         </div>
@@ -228,7 +240,8 @@
                         <div>
                             <x-input-label for="tax_percent" :value="__('Tax (%) (optional)')" />
                             <x-text-input id="tax_percent" name="tax_percent" type="number" min="0" max="100" step="1"
-                                          class="mt-1 block w-full" x-model.number="header.tax_percent" />
+                                          class="mt-1 block w-full" x-model.number="header.tax_percent"
+                                          placeholder="{{ __('e.g. 11') }}" />
                             <p class="mt-1 text-xs text-gray-500">{{ __('Configurable per workspace — 0 means tax is not charged.') }}</p>
                         </div>
 
@@ -236,7 +249,8 @@
                             <div>
                                 <x-input-label for="shipping" :value="__('Shipping (Rp) (optional)')" />
                                 <x-text-input id="shipping" name="shipping" type="number" min="0" step="0.01"
-                                              class="mt-1 block w-full" x-model.number="header.shipping" />
+                                              class="mt-1 block w-full" x-model.number="header.shipping"
+                                              placeholder="{{ __('e.g. 10000') }}" />
                             </div>
                         @endif
                     </div>
@@ -291,7 +305,8 @@
                         <x-input-label for="payment_amount" :value="__('Amount paid (Rp) (optional)')" />
                         <div class="mt-1 flex items-center gap-2">
                             <x-text-input id="payment_amount" name="payment_amount" type="number" min="0" step="0.01"
-                                          class="block w-full" x-model.number="paid" />
+                                          class="block w-full" x-model.number="paid"
+                                          placeholder="{{ __('e.g. 150000') }}" />
                             <button type="button" @click="paid = total"
                                     class="shrink-0 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
                                 {{ __('Exact') }}
@@ -333,7 +348,7 @@
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z"></path>
                         </svg>
-                        {{ __('Saving…') }}
+                        {{ __('Recording…') }}
                     </span>
                 </x-primary-button>
                 <a href="{{ route('sales.index') }}" class="text-sm text-gray-600 underline">{{ __('Cancel') }}</a>
@@ -378,6 +393,71 @@
                     },
                     paid: '',
                     submitting: false,
+                    scanError: '',
+
+                    /**
+                     * The submit button must never get stuck.
+                     *
+                     * `submitting` is set by the form's submit handler. A request that
+                     * never navigates (offline, blocked, validation round-trip) would
+                     * otherwise leave "Recording…" and a disabled button behind, so the
+                     * state is released on Back/Forward and after a safety timeout —
+                     * the same two rules the global submit loader applies.
+                     */
+                    init() {
+                        window.addEventListener('pageshow', () => {
+                            this.submitting = false;
+                        });
+
+                        this.$watch('submitting', (busy) => {
+                            if (!busy) {
+                                return;
+                            }
+
+                            setTimeout(() => {
+                                this.submitting = false;
+                            }, 20000);
+                        });
+                    },
+
+                    /**
+                     * Barcode / SKU scan handler.
+                     *
+                     * Matching runs against the product payload the server already
+                     * sent for THIS workspace, so a barcode belonging to another
+                     * workspace can never resolve to a product here. The price is
+                     * still re-validated server-side on submit.
+                     */
+                    addByCode(code) {
+                        const needle = String(code || '').trim().toLowerCase();
+
+                        if (!needle) {
+                            return;
+                        }
+
+                        const match = this.products.find((p) =>
+                            (p.barcode && String(p.barcode).trim().toLowerCase() === needle) ||
+                            (p.sku && String(p.sku).trim().toLowerCase() === needle)
+                        );
+
+                        if (!match) {
+                            this.scanError = 'No product in this workspace matches the code ' + code + '.';
+                            return;
+                        }
+
+                        // Reuse the empty first row before appending a new one.
+                        const target = this.items.find((row) => !row.product_id) || null;
+                        const row = target || blankRow(this.nextKey++);
+
+                        if (!target) {
+                            this.items.push(row);
+                        }
+
+                        row.product_id = match.id;
+                        row.quantity = Number(row.quantity) || 1;
+                        row.unit_price = match.price;
+                        this.scanError = '';
+                    },
 
                     product(row) {
                         return this.products.find((p) => String(p.id) === String(row.product_id)) || null;

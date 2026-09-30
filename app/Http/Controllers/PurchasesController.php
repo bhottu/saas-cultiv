@@ -74,6 +74,105 @@ class PurchasesController extends Controller
     }
 
 
+    public function show(Purchase $purchase)
+    {
+        $this->auth->authorize('purchases.view');
+        $this->ensureOwned($purchase);
+        return view('purchases.show', [
+            'purchase' => $purchase->load(['supplier', 'warehouse', 'createdBy', 'items.product', 'invoice.payments']),
+        ]);
+    }
+
+    public function store(Request $request)
+    {
+        $this->auth->authorize('purchases.create');
+        $tenant = $request->user()->currentTenant;
+        $validated = $request->validate($this->rules($request, $tenant));
+        $totals = $this->totals($validated);
+
+        $purchase = DB::transaction(function () use ($tenant, $validated, $totals) {
+            $purchase = Purchase::create([
+                'tenant_id' => $tenant->id, 'supplier_id' => $validated['supplier_id'],
+                'warehouse_id' => $validated['warehouse_id'], 'invoice_number' => $this->numbering->next('purchase', $tenant->id),
+                'status' => 'ordered', 'subtotal' => $totals['subtotal'], 'discount' => $totals['discount'],
+                'tax' => $totals['tax'], 'shipping' => $totals['shipping'], 'total' => $totals['total'],
+                'ordered_at' => now(), 'expected_at' => $validated['expected_at'] ?? null,
+                'created_by' => auth()->id(), 'notes' => $validated['notes'] ?? null,
+            ]);
+
+            foreach ($validated['items'] as $row) {
+                $product = Product::findOrFail((int) $row['product_id']);
+                $unitCost = \App\Services\Money::centsFromDisplay($row['unit_cost']);
+                $quantity = (int) $row['quantity'];
+                $purchase->items()->create(['tenant_id' => $tenant->id, 'product_id' => $product->id,
+                    'product_name' => $product->name, 'sku' => $product->sku, 'unit' => $product->unit,
+                    'quantity' => $quantity, 'unit_cost' => $unitCost, 'subtotal' => $unitCost * $quantity]);
+            }
+
+            BusinessInvoice::create(['tenant_id' => $tenant->id, 'invoice_number' => $purchase->invoice_number,
+                'supplier_id' => $purchase->supplier_id, 'purchase_id' => $purchase->id, 'status' => 'open',
+                'subtotal' => $purchase->subtotal, 'discount' => $purchase->discount, 'tax' => $purchase->tax,
+                'shipping' => $purchase->shipping, 'total' => $purchase->total, 'outstanding' => $purchase->total,
+                'issued_at' => now(), 'due_at' => $validated['expected_at'] ?? null,
+                'notes' => 'Supplier invoice generated from purchase '.$purchase->invoice_number]);
+            return $purchase;
+        });
+
+        AuditLogger::log('purchase.created', $purchase, ['invoice_number' => $purchase->invoice_number, 'total' => $purchase->total]);
+        return redirect()->route('purchases.show', $purchase)->with('status', ['type' => 'success', 'message' => 'Purchase order created. Receive it to increase stock.']);
+    }
+
+    public function edit(Purchase $purchase)
+    {
+        $this->auth->authorize('purchases.update');
+        $this->ensureOwned($purchase);
+        abort_unless(in_array($purchase->status, ['draft', 'ordered'], true), 403, 'Received purchases are immutable.');
+        $tenant = request()->user()->currentTenant;
+        return view('purchases.form', [
+            'purchase' => $purchase->load('items'), 'suppliers' => $tenant->suppliers()->active()->orderBy('name')->get(),
+            'products' => Product::where('is_active', true)->orderBy('name')->get(),
+            'warehouses' => $tenant->warehouses()->active()->orderBy('name')->get(),
+            'pageTitle' => 'Edit Purchase Order', 'submitUrl' => route('purchases.update', $purchase),
+        ]);
+    }
+
+    public function update(Request $request, Purchase $purchase)
+    {
+        $this->auth->authorize('purchases.update');
+        $this->ensureOwned($purchase);
+        abort_unless(in_array($purchase->status, ['draft', 'ordered'], true), 403, 'Received purchases are immutable.');
+        $validated = $request->validate($this->rules($request, $request->user()->currentTenant));
+        $totals = $this->totals($validated);
+        DB::transaction(function () use ($purchase, $validated, $totals) {
+            $purchase->update(array_merge($validated, $totals));
+            $purchase->items()->delete();
+            foreach ($validated['items'] as $row) {
+                $product = Product::findOrFail((int) $row['product_id']);
+                $unitCost = \App\Services\Money::centsFromDisplay($row['unit_cost']);
+                $quantity = (int) $row['quantity'];
+                $purchase->items()->create(['tenant_id' => $purchase->tenant_id, 'product_id' => $product->id,
+                    'product_name' => $product->name, 'sku' => $product->sku, 'unit' => $product->unit,
+                    'quantity' => $quantity, 'unit_cost' => $unitCost, 'subtotal' => $unitCost * $quantity]);
+            }
+            $purchase->invoice?->update(['supplier_id' => $purchase->supplier_id, 'subtotal' => $totals['subtotal'],
+                'discount' => $totals['discount'], 'tax' => $totals['tax'], 'shipping' => $totals['shipping'],
+                'total' => $totals['total'], 'outstanding' => max(0, $totals['total'] - (int) ($purchase->invoice?->amount_paid ?? 0))]);
+        });
+        AuditLogger::log('purchase.updated', $purchase, ['invoice_number' => $purchase->invoice_number]);
+        return redirect()->route('purchases.show', $purchase)->with('status', ['type' => 'success', 'message' => 'Purchase updated.']);
+    }
+
+    public function destroy(Purchase $purchase)
+    {
+        $this->auth->authorize('purchases.delete');
+        $this->ensureOwned($purchase);
+        abort_unless($purchase->status === 'draft', 403, 'Only draft purchases can be deleted.');
+        $purchase->invoice()?->delete();
+        $purchase->delete();
+        AuditLogger::log('purchase.deleted', $purchase, ['invoice_number' => $purchase->invoice_number]);
+        return redirect()->route('purchases.index')->with('status', ['type' => 'success', 'message' => 'Draft purchase deleted.']);
+    }
+
     public function receive(Purchase $purchase)
     {
         $this->auth->authorize('purchases.receive');
@@ -90,10 +189,13 @@ class PurchasesController extends Controller
                 $product = Product::withoutGlobalScopes()->findOrFail($item->product_id);
 
                 if ($product->track_inventory) {
-                    $this->inventory->fulfill(
+                    // A purchase RECEIPT adds stock. fulfill() is the outgoing (sale) path and
+                    // would deduct inventory — receiving must use the generic movement writer.
+                    $this->inventory->apply(
                         $purchase->tenant,
                         $product,
                         $purchase->warehouse_id,
+                        'purchase',
                         $item->quantity,
                         auth()->id(),
                         'purchase',
@@ -147,6 +249,36 @@ class PurchasesController extends Controller
         });
 
         return redirect()->route('purchases.show', $purchase)->with('status', ['type' => 'success', 'message' => 'Purchase cancelled.']);
+    }
+
+    private function rules(Request $request, \App\Models\Tenant $tenant): array
+    {
+        $owned = fn (string $table) => \Illuminate\Validation\Rule::exists($table, 'id')->where(fn ($query) => $query->where('tenant_id', $tenant->id));
+        return [
+                'supplier_id' => ['required', 'integer', $owned('suppliers')],
+                'warehouse_id' => ['required', 'integer', $owned('warehouses')],
+            'expected_at' => ['nullable', 'date'],
+            'discount' => ['nullable', 'numeric', 'min:0'],
+            'tax' => ['nullable', 'numeric', 'min:0'],
+            'shipping' => ['nullable', 'numeric', 'min:0'],
+            'notes' => ['nullable', 'string', 'max:65535'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.product_id' => ['required', 'integer', $owned('products'), 'distinct'],
+            'items.*.quantity' => ['required', 'integer', 'min:1', 'max:1000000'],
+            'items.*.unit_cost' => ['required', 'numeric', 'min:0'],
+        ];
+    }
+
+    private function totals(array $data): array
+    {
+        $subtotal = 0;
+        foreach ($data['items'] as $item) {
+            $subtotal += (int) $item['quantity'] * \App\Services\Money::centsFromDisplay($item['unit_cost']);
+        }
+        $discount = min($subtotal, \App\Services\Money::centsFromDisplay($data['discount'] ?? 0));
+        $tax = \App\Services\Money::centsFromDisplay($data['tax'] ?? 0);
+        $shipping = \App\Services\Money::centsFromDisplay($data['shipping'] ?? 0);
+        return compact('subtotal', 'discount', 'tax', 'shipping') + ['total' => max(0, $subtotal - $discount) + $tax + $shipping];
     }
 
     private function ensureOwned(Purchase $purchase): void

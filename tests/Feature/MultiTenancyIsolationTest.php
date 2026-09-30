@@ -59,8 +59,16 @@ class MultiTenancyIsolationTest extends TestCase
             ->assertForbidden();
 
         // Even with a forged session value, EnsureTenantContext re-validates membership.
+        // The forged id is dropped and the account is sent to the workspace hub: tenant A
+        // stays closed to owner B, and the account is not parked on a dead 403.
         $this->actingAs($this->ownerB)->withSession(['tenant_id' => $this->tenantA->id])
-            ->get('/dashboard')->assertForbidden();
+            ->get('/dashboard')->assertRedirect(route('tenants.index'));
+
+        $this->assertNull($this->ownerB->fresh()->current_tenant_id);
+
+        $html = $this->actingAs($this->ownerB)->get('/tenants')->assertOk()->getContent();
+        $this->assertStringContainsString($this->tenantB->name, $html);
+        $this->assertStringNotContainsString($this->tenantA->name, $html, 'Tenant A must never appear for owner B.');
     }
 
     public function test_valid_switch_works(): void

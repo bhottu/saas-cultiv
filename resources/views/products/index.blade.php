@@ -94,6 +94,20 @@
             </div>
         </form>
 
+        {{-- Scan to find: the decoded code fills the search box and re-runs the filter. --}}
+        <div class="flex flex-wrap items-center gap-3"
+             x-data="{ findByCode(code) {
+                 const input = document.getElementById('search');
+                 if (input) { input.value = code; }
+                 const form = input ? input.closest('form') : null;
+                 if (form) { form.submit(); }
+             } }"
+             @barcode-scanned.window="findByCode($event.detail.code)">
+            <x-barcode-scanner-modal :label="__('Scan to find a product')"
+                                     :title="__('Scan a product barcode')"
+                                     :hint="__('Point the camera at the barcode to filter the list.')" />
+            <span class="text-xs text-gray-500">{{ __('Scanning filters this list by barcode or SKU.') }}</span>
+        </div>
         {{-- Listing --}}
         <div class="bg-white shadow rounded-lg overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200 text-sm">

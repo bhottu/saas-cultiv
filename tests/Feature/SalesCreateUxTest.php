@@ -124,6 +124,39 @@ class SalesCreateUxTest extends TestCase
             ->assertSee('customer-modal-title', false);
     }
 
+    /**
+     * Regression: the barcode scanner lives inside this form, and a nested
+     * <form>...</form> makes the HTML parser close the OUTER form early. The
+     * submit button then sits outside any form and clicking "Record sale" does
+     * nothing at all — no request, no sale, no stock movement.
+     */
+    public function test_record_sale_button_is_inside_the_sale_form(): void
+    {
+        $html = $this->member()->get('/sales/create')->assertOk()->getContent();
+
+        $open = strpos($html, '<form method="POST" action="'.route('sales.store').'"');
+        $button = strpos($html, 'Record sale');
+        $close = strpos($html, '</form>', (int) $open);
+
+        $this->assertNotFalse($open, 'The sale form is missing.');
+        $this->assertNotFalse($button, 'The Record sale button is missing.');
+        $this->assertNotFalse($close, 'The sale form is never closed.');
+
+        $this->assertGreaterThan(
+            $button,
+            $close,
+            'The sale form closes before its submit button: some nested <form> is orphaning "Record sale".'
+        );
+    }
+
+    public function test_record_sale_button_reports_progress_while_saving(): void
+    {
+        $this->member()->get('/sales/create')->assertOk()
+            ->assertSee('Recording…')
+            // Alpine owns the disabled state, so the global loader steps aside for it.
+            ->assertSee('x-bind:disabled="submitting"', false);
+    }
+
     public function test_sale_submit_persists_sale_items_payment_and_deducts_stock_once(): void
     {
         $response = $this->member()->post('/sales', $this->payload());
@@ -282,6 +315,14 @@ class SalesCreateUxTest extends TestCase
             ->assertSee('Current stock');
     }
 
+    /** Placeholder examples on the sale form: totals, payment, and item rows. */
+    public function test_sale_form_placeholders_show_amount_examples(): void
+    {
+        $html = $this->member()->get('/sales/create')->assertOk()->getContent();
 
-
+        $this->assertStringContainsString('placeholder="e.g. 150000"', $html);   // amount paid
+        $this->assertStringContainsString('placeholder="e.g. 11"', $html);       // tax percent
+        $this->assertStringContainsString('placeholder="Unit price"', $html);    // line item price
+        $this->assertStringContainsString('placeholder="Qty"', $html);           // line item quantity
+    }
 }

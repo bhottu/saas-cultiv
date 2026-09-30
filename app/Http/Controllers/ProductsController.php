@@ -40,12 +40,9 @@ class ProductsController extends Controller
         $query = Product::with(['category', 'brand'])->where('tenant_id', $tenant->id);
 
         if ($request->filled('search')) {
-            $term = $request->string('search')->toString();
-            $query->where(function ($q) use ($term) {
-                $q->where('name', 'like', "%{$term}%")
-                    ->orWhere('sku', 'like', "%{$term}%")
-                    ->orWhere('barcode', 'like', "%{$term}%");
-            });
+            // Case-insensitive via the shared Product::scopeSearch (PostgreSQL LIKE
+            // is case-sensitive; "kopi" must find "Kopi Susu" like "Kopi" does).
+            $query->search($request->string('search')->toString());
         }
 
         if ($request->filled('category_id')) {

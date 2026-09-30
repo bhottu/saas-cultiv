@@ -6,6 +6,7 @@ use App\Services\AuditLogger;
 use App\Models\Warehouse;
 use App\Services\BusinessAuthorization;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 /**
  * Warehouse / location CRUD (tenant-scoped).
@@ -19,14 +20,26 @@ class WarehousesController extends Controller
         $this->auth->authorize('warehouses.view');
 
         $warehouses = Warehouse::withCount('products')
-            ->when(! $request->boolean('inactive'), fn ($q) => $q->where('is_active', true))
-            ->when($request->boolean('inactive'), fn ($q) => $q)
+            ->when($request->boolean('inactive'), fn ($q) => $q, fn ($q) => $q->where('is_active', true))
             ->orderBy('name')
             ->paginate(50);
 
         return view('warehouses.index', [
             'warehouses' => $warehouses,
+            // "showInactive" = include inactive rows (the default list is active only).
             'showInactive' => $request->boolean('inactive'),
+        ]);
+    }
+
+    public function show(Warehouse $warehouse)
+    {
+        $this->auth->authorize('warehouses.view');
+        $this->ensureOwned($warehouse);
+
+        return view('warehouses.show', [
+            'warehouse' => $warehouse,
+            'balances' => $warehouse->stockBalances()->with('product')->orderBy('product_id')->paginate(50),
+            'movements' => $warehouse->stockMovements()->with(['product', 'createdBy'])->latest('id')->limit(50)->get(),
         ]);
     }
 
@@ -41,13 +54,22 @@ class WarehousesController extends Controller
         ]);
     }
 
+    private function codeRule(Request $request, bool $ignoreCurrent = false): \Illuminate\Validation\Rules\Unique
+    {
+        $tenantId = $this->tenantId($request);
+        $rule = Rule::unique('warehouses', 'code')
+            ->where(fn ($query) => $query->where('tenant_id', $tenantId));
+
+        return $ignoreCurrent && $request->route('warehouse') ? $rule->ignore($request->route('warehouse')->id) : $rule;
+    }
+
     public function store(Request $request)
     {
         $this->auth->authorize('warehouses.create');
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'code' => 'nullable|string|max:30|unique:warehouses,code,tenant_id,'.$this->tenantId($request),
+            'code' => ['nullable', 'string', 'max:30', $this->codeRule($request)],
             'address' => 'nullable|string|max:65535',
             'is_active' => 'boolean',
         ]);
@@ -78,7 +100,7 @@ class WarehousesController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'code' => 'nullable|string|max:30|unique:warehouses,code,tenant_id,'.$this->tenantId($request).',id,'.$warehouse->id,
+            'code' => ['nullable', 'string', 'max:30', $this->codeRule($request, true)],
             'address' => 'nullable|string|max:65535',
             'is_active' => 'boolean',
         ]);
@@ -95,7 +117,7 @@ class WarehousesController extends Controller
         $this->auth->authorize('warehouses.delete');
         $this->ensureOwned($warehouse);
 
-        $usedBy = $warehouse->stockBalances()->exists();
+        $usedBy = $warehouse->stockBalances()->exists() || $warehouse->stockMovements()->exists();
         if ($usedBy) {
             return back()->with('status', ['type' => 'error', 'message' => 'Warehouse has stock balances. Remove or transfer stock first.']);
         }

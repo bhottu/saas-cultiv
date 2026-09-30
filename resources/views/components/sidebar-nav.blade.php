@@ -13,7 +13,9 @@
                         <li>
                             <x-sidebar-link :href="$item['href']"
                                             :active="$item['active'] ?? false"
-                                            :icon="$item['icon'] ?? null">
+                                            :icon="$item['icon'] ?? null"
+                                            :locked="$item['locked'] ?? false"
+                                            :lock-title="$item['lock-title'] ?? null">
                                 {{ $item['label'] }}
                             </x-sidebar-link>
                         </li>

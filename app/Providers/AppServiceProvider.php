@@ -16,6 +16,11 @@ class AppServiceProvider extends ServiceProvider
         // One shared context instance, reachable by class name and alias.
         $this->app->singleton(TenantContext::class);
         $this->app->alias(TenantContext::class, 'tenant.context');
+
+        // Stateless service: it reads the workspace's installs on every call, so a
+        // singleton is safe and keeps the alias usable from Blade and middleware.
+        $this->app->singleton(\App\Services\ModuleManager::class);
+        $this->app->alias(\App\Services\ModuleManager::class, 'modules');
     }
 
     public function boot(): void

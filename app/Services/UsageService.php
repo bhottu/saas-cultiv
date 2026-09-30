@@ -13,6 +13,21 @@ use Illuminate\Support\Facades\DB;
 /** Usage metering + server-side plan limit enforcement. */
 class UsageService
 {
+    /**
+     * Human-readable feature labels + the plans that include them. This is the
+     * SINGLE mapping used by server-side enforcement AND the navigation lock
+     * hints, so the UI can never advertise a different plan than the gate.
+     *
+     * @var array<string, array{0: string, 1: string}>
+     */
+    public const FEATURE_LABELS = [
+        'advanced_reports' => ['Advanced Reports', 'Pro and Business'],
+        'advanced_permissions' => ['Advanced Permissions', 'Pro and Business'],
+        'api_access' => ['API Access', 'Business'],
+        'audit_log' => ['Audit Log', 'Pro and Business'],
+        'advanced_analytics' => ['Advanced Analytics', 'Pro and Business'],
+    ];
+
     public function record(Tenant $tenant, string $metric, int $amount = 1): void
     {
         [$start, $end] = $this->period($metric);
@@ -136,16 +151,16 @@ class UsageService
             return;
         }
 
-        $labels = [
-            'advanced_reports' => ['Advanced Reports', 'Pro and Business'],
-            'advanced_permissions' => ['Advanced Permissions', 'Pro and Business'],
-            'api_access' => ['API Access', 'Business'],
-            'audit_log' => ['Audit Log', 'Pro and Business'],
-            'advanced_analytics' => ['Advanced Analytics', 'Pro and Business'],
-        ];
+        $labels = self::FEATURE_LABELS;
         [$label, $plans] = $labels[$feature] ?? [str($feature)->headline()->toString(), 'Pro and Business'];
 
         throw new SubscriptionLimitException($label, null, null, $this->planFor($tenant)?->name ?? 'Free', $feature, $plans);
+    }
+
+    /** The plans that include $feature — for "Available on …" lock hints in the UI. */
+    public function featurePlans(string $feature): string
+    {
+        return self::FEATURE_LABELS[$feature][1] ?? 'Pro and Business';
     }
 
     public function planFor(Tenant $tenant): ?Plan

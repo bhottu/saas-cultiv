@@ -5,6 +5,17 @@
             <div class="flex items-center gap-3">
                 <a href="{{ route('products.edit', $product) }}"
                    class="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700">{{ __('Edit') }}</a>
+
+                {{-- After saving a product the user lands here; without a shortcut the
+                     only way to add the next one is back through /products. Same label
+                     and button style as the listing, and gated on the same
+                     `products.create` permission so nobody is offered a page that
+                     would only answer 403. --}}
+                @if (app(\App\Services\BusinessAuthorization::class)->can('products.create'))
+                    <a href="{{ route('products.create') }}"
+                       class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">{{ __('Add product') }}</a>
+                @endif
+
                 <a href="{{ route('products.index') }}" class="text-sm text-gray-600 underline">{{ __('Back to products') }}</a>
             </div>
         </div>

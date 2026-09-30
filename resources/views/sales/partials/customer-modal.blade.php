@@ -17,21 +17,25 @@
             <div>
                 <label for="sale_customer_name" class="block text-sm font-medium text-gray-700">{{ __('Name *') }}</label>
                 <input id="sale_customer_name" x-model="customerForm.name" required type="text" maxlength="255"
+                       placeholder="{{ __('e.g. Budi Santoso') }}"
                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
             </div>
             <div>
                 <label for="sale_customer_phone" class="block text-sm font-medium text-gray-700">{{ __('Phone *') }}</label>
                 <input id="sale_customer_phone" x-model="customerForm.phone" required type="tel" maxlength="50"
+                       placeholder="{{ __('e.g. 081234567890') }}"
                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
             </div>
             <div>
                 <label for="sale_customer_email" class="block text-sm font-medium text-gray-700">{{ __('Email (optional)') }}</label>
                 <input id="sale_customer_email" x-model="customerForm.email" type="email" maxlength="255"
+                       placeholder="{{ __('e.g. budi@example.com') }}"
                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
             </div>
             <div>
                 <label for="sale_customer_address" class="block text-sm font-medium text-gray-700">{{ __('Address (optional)') }}</label>
                 <input id="sale_customer_address" x-model="customerForm.address" type="text" maxlength="255"
+                       placeholder="{{ __('e.g. Jl. Merdeka No. 1, Jakarta') }}"
                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
             </div>
 

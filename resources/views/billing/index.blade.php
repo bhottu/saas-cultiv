@@ -35,7 +35,7 @@
         {{-- Pending payment --}}
         @if ($pendingPayment)
             <div class="bg-yellow-50 border border-yellow-300 rounded-lg p-6">
-                <h3 class="font-semibold">Pending payment — IDR {{ number_format($pendingPayment->amount) }}</h3>
+                <h3 class="font-semibold">Pending payment — {{ \App\Services\Money::formatRupiah($pendingPayment->amount) }}</h3>
                 <p class="text-sm text-gray-600">Expires {{ $pendingPayment->expires_at?->format('H:i') }}.
                     <a class="text-indigo-600 underline" href="{{ route('billing.pay', $pendingPayment) }}">Show QR code →</a></p>
             </div>
@@ -48,33 +48,19 @@
                     <h3 class="font-bold text-lg">{{ $plan->name }}</h3>
                     <p class="text-sm text-gray-500 mb-2">{{ $plan->description }}</p>
                     <div class="text-xl font-bold mb-1">
-                        @if ($plan->price_monthly > 0)
-                            Rp {{ number_format($plan->price_monthly) }}<span class="text-sm text-gray-500">/mo</span>
-                        @else
-                            Rp 0<span class="text-sm text-gray-500">/mo</span>
-                        @endif
+                        {{ \App\Services\Money::formatRupiah($plan->price_monthly) }}<span class="text-sm text-gray-500">/mo</span>
                     </div>
-                    <ul class="text-sm text-gray-600 mb-4 flex-1 space-y-1.5">
-                        <li>✓ {{ $plan->displayLimit('max_workspaces') }} Workspace{{ $plan->limit('max_workspaces') === 1 ? '' : 's' }}</li>
-                        <li>✓ {{ $plan->displayLimit('max_users') }} User{{ $plan->limit('max_users') === 1 ? '' : 's' }}</li>
-                        <li>✓ {{ $plan->displayLimit('max_products') }} Products</li>
-                        <li>✓ Unlimited Customers</li>
-                        <li>✓ Basic Sales</li>
-                        <li>✓ Basic Stock</li>
-                        <li>✓ Basic Purchase</li>
-                        <li>✓ Basic Reports</li>
-                        @foreach (($plan->features ?? []) as $f)
-                            @if (! in_array($f, ['1 Workspace', '3 Workspaces', '10 Workspaces', 'Unlimited Workspaces', '1 User', '5 Users', '15 Users', '50 Users', '100 Products', 'Unlimited Products', 'Unlimited Customers', 'Basic Sales', 'Basic Stock', 'Basic Purchase', 'Basic Reports'], true))
-                                <li>✓ {{ $f }}</li>
-                            @endif
-                        @endforeach
-                    </ul>
+                    {{-- Features + Modules come from one shared component so this page can
+                         never disagree with the pricing page or /admin/plans. --}}
+                    <div class="mb-4 flex-1">
+                        <x-plan-capabilities :plan="$plan" />
+                    </div>
                     @if ($subscription?->plan_id !== $plan->id)
                         <form method="POST" action="{{ route('billing.checkout') }}">
                             @csrf
                             <input type="hidden" name="plan" value="{{ $plan->slug }}">
                             <input type="hidden" name="cycle" value="monthly">
-                            <x-primary-button>{{ $plan->price_monthly > 0 ? 'Subscribe' : 'Switch to Free' }}</x-primary-button>
+                            <x-primary-button data-busy-label="{{ __('Processing payment…') }}">{{ $plan->price_monthly > 0 ? 'Subscribe' : 'Switch to Free' }}</x-primary-button>
                         </form>
                     @endif
                 </div>
@@ -89,7 +75,7 @@
                     <table class="w-full min-w-[28rem] text-sm">
                     @forelse ($invoices as $inv)
                         <tr class="border-t"><td class="py-1 font-mono text-xs">{{ $inv->invoice_number }}</td>
-                            <td>IDR {{ number_format($inv->amount) }}</td>
+                            <td>{{ \App\Services\Money::formatRupiah($inv->amount) }}</td>
                             <td><span class="px-2 rounded-full {{ $inv->status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-gray-100' }}">{{ $inv->status }}</span></td></tr>
                     @empty
                         <tr><td class="text-gray-500 py-2">No invoices yet.</td></tr>
@@ -103,7 +89,7 @@
                     <table class="w-full min-w-[28rem] text-sm">
                     @forelse ($payments as $pay)
                         <tr class="border-t"><td class="py-1 font-mono text-xs">{{ $pay->order_id }}</td>
-                            <td>IDR {{ number_format($pay->amount) }}</td>
+                            <td>{{ \App\Services\Money::formatRupiah($pay->amount) }}</td>
                             <td><span class="px-2 rounded-full {{ $pay->status === 'paid' ? 'bg-green-100 text-green-700' : ($pay->status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100') }}">{{ $pay->status }}</span></td></tr>
                     @empty
                         <tr><td class="text-gray-500 py-2">No payments yet.</td></tr>

@@ -167,6 +167,45 @@ class SalesFlowTest extends TestCase
         $this->get('/sales/create')->assertRedirect('/login');
     }
 
+    /**
+     * Recording a sale is a batch job, and every order ends on its detail page. Without
+     * a shortcut there the only way to start the next one is back through /sales.
+     */
+    public function test_the_sale_detail_offers_a_direct_shortcut_to_the_next_sale(): void
+    {
+        $sale = $this->recordSale();
+
+        $html = $this->asMember($this->tenant)->get("/sales/{$sale->id}")->assertOk()->getContent();
+
+        // Rendered as a link straight to the create form — no detour through /sales.
+        $this->assertStringContainsString(route('sales.create'), $html);
+        $this->assertStringContainsString('New sale', $html);
+
+        // ...and that link actually lands on the create page.
+        $this->asMember($this->tenant)->get(route('sales.create'))->assertOk();
+    }
+
+    public function test_the_sale_detail_hides_the_shortcut_from_a_read_only_member(): void
+    {
+        $sale = $this->recordSale();
+
+        $viewer = User::create([
+            'name' => 'Viewer', 'email' => 'sales-viewer@test.dev',
+            'password' => Hash::make('password'), 'email_verified_at' => now(),
+        ]);
+        $this->tenant->users()->attach($viewer->id, [
+            'role' => 'Viewer', 'status' => 'active', 'joined_at' => now(),
+        ]);
+
+        $html = $this->asMember($this->tenant, $viewer)->get("/sales/{$sale->id}")->assertOk()->getContent();
+
+        // A Viewer cannot open /sales/create, so offering the button would only lead to
+        // a 403. Everything else on the page stays exactly as it was.
+        $this->assertStringNotContainsString(route('sales.create'), $html);
+        $this->assertStringContainsString(route('sales.index'), $html);
+        $this->assertStringContainsString(route('sales.print', $sale), $html);
+    }
+
     // ---------------------------------------------------------------- recording a sale
 
     public function test_sale_is_recorded_with_readable_invoice_number_and_deducts_stock(): void

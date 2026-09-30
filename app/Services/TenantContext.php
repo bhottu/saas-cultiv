@@ -20,7 +20,13 @@ class TenantContext
     {
         $this->tenant = $tenant;
         $this->user = $user;
-        $this->role = ($tenant && $user) ? $tenant->users()->where('users.id', $user->id)->value('role') : null;
+
+        // The role is read from an ACTIVE membership only. Reading the pivot directly
+        // would also hand a role to an invited or removed (soft-deleted) member, so a
+        // revoked account could still pass permission checks if a context were ever
+        // set for it. `membershipIn()` filters status = active plus the SoftDeletes
+        // scope, which keeps membership separate from the user account.
+        $this->role = ($tenant && $user) ? $user->membershipIn($tenant)?->role : null;
 
         if ($tenant && $user) {
             Cache::remember("tenant.settings.{$tenant->id}", 300, fn () => $tenant->settings ?? []);

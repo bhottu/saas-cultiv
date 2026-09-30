@@ -38,4 +38,64 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'tenant', 'plan.feature:api_acc
         return response()->json($ctx->tenant()->payments()->latest()->take(50)
             ->get(['id', 'order_id', 'amount', 'currency', 'status', 'created_at']));
     })->name('api.v1.payments');
+
+    // ---------------------------------------------------------------- business data
+    //
+    // Read-only on purpose. The business API is a data surface for integrations
+    // (POS, mobile, reporting, marketplaces); writes stay behind the web layer so they
+    // keep the full validation, permission and stock-locking rules of the domain
+    // services instead of being re-implemented per endpoint.
+    //
+    // Static segments are declared BEFORE the {id} routes so a path like
+    // "products/lookup" is never parsed as a product id.
+    Route::get('/products/lookup', [\App\Http\Controllers\Api\V1\ProductController::class, 'lookup'])
+        ->name('api.v1.products.lookup');
+    Route::get('/products', [\App\Http\Controllers\Api\V1\ProductController::class, 'index'])
+        ->name('api.v1.products.index');
+    Route::get('/products/{product}', [\App\Http\Controllers\Api\V1\ProductController::class, 'show'])
+        ->name('api.v1.products.show');
+
+    Route::get('/categories', [\App\Http\Controllers\Api\V1\CategoryController::class, 'index'])
+        ->name('api.v1.categories.index');
+    Route::get('/categories/{category}', [\App\Http\Controllers\Api\V1\CategoryController::class, 'show'])
+        ->name('api.v1.categories.show');
+
+    Route::get('/brands', [\App\Http\Controllers\Api\V1\BrandController::class, 'index'])
+        ->name('api.v1.brands.index');
+    Route::get('/brands/{brand}', [\App\Http\Controllers\Api\V1\BrandController::class, 'show'])
+        ->name('api.v1.brands.show');
+
+    Route::get('/customers', [\App\Http\Controllers\Api\V1\CustomerController::class, 'index'])
+        ->name('api.v1.customers.index');
+    Route::get('/customers/{customer}', [\App\Http\Controllers\Api\V1\CustomerController::class, 'show'])
+        ->name('api.v1.customers.show');
+    Route::get('/customers/{customer}/sales', [\App\Http\Controllers\Api\V1\CustomerController::class, 'sales'])
+        ->name('api.v1.customers.sales');
+
+    Route::get('/suppliers', [\App\Http\Controllers\Api\V1\SupplierController::class, 'index'])
+        ->name('api.v1.suppliers.index');
+    Route::get('/suppliers/{supplier}', [\App\Http\Controllers\Api\V1\SupplierController::class, 'show'])
+        ->name('api.v1.suppliers.show');
+
+    Route::get('/warehouses', [\App\Http\Controllers\Api\V1\WarehouseController::class, 'index'])
+        ->name('api.v1.warehouses.index');
+    Route::get('/warehouses/{warehouse}', [\App\Http\Controllers\Api\V1\WarehouseController::class, 'show'])
+        ->name('api.v1.warehouses.show');
+
+    Route::get('/stock/summary', [\App\Http\Controllers\Api\V1\StockController::class, 'summary'])
+        ->name('api.v1.stock.summary');
+    Route::get('/stock', [\App\Http\Controllers\Api\V1\StockController::class, 'index'])
+        ->name('api.v1.stock.index');
+    Route::get('/stock/{product}', [\App\Http\Controllers\Api\V1\StockController::class, 'show'])
+        ->name('api.v1.stock.show');
+
+    Route::get('/sales', [\App\Http\Controllers\Api\V1\SaleController::class, 'index'])
+        ->name('api.v1.sales.index');
+    Route::get('/sales/{sale}', [\App\Http\Controllers\Api\V1\SaleController::class, 'show'])
+        ->name('api.v1.sales.show');
+
+    Route::get('/purchases', [\App\Http\Controllers\Api\V1\PurchaseController::class, 'index'])
+        ->name('api.v1.purchases.index');
+    Route::get('/purchases/{purchase}', [\App\Http\Controllers\Api\V1\PurchaseController::class, 'show'])
+        ->name('api.v1.purchases.show');
 });

@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\AuditLogger;
-use App\Services\BusinessUsageService;
 use App\Models\Customer;
+use App\Services\AuditLogger;
 use App\Services\BusinessAuthorization;
+use App\Services\BusinessUsageService;
 use App\Services\Money;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -56,7 +56,7 @@ class CustomersController extends Controller
         $this->auth->authorize('customers.create');
 
         return view('customers.form', [
-            'customer'  => new Customer(['is_active' => true]),
+            'customer' => new Customer(['is_active' => true]),
             'pageTitle' => 'Add Customer',
             'submitUrl' => route('customers.store'),
         ]);
@@ -75,7 +75,7 @@ class CustomersController extends Controller
             'email' => 'nullable|email|max:255',
             'address' => 'nullable|string|max:255',
             'notes' => 'nullable|string|max:65535',
-            'credit_limit' => 'nullable|integer|min:0',
+            'credit_limit' => 'nullable|numeric|min:0|max:100000000',
             'is_active' => 'boolean',
         ]);
 
@@ -95,7 +95,7 @@ class CustomersController extends Controller
         $this->usage->enforce($tenant, 'customers_count');
 
         $customer = Customer::create(array_merge($validated, [
-            'tenant_id'    => $this->tenantId($request),
+            'tenant_id' => $this->tenantId($request),
             // Same money convention as products: user-facing amount in, cents stored.
             'credit_limit' => Money::centsFromDisplay($validated['credit_limit'] ?? 0),
         ]));
@@ -107,8 +107,8 @@ class CustomersController extends Controller
         if ($request->expectsJson()) {
             return response()->json([
                 'customer' => [
-                    'id'    => (int) $customer->id,
-                    'name'  => $customer->name,
+                    'id' => (int) $customer->id,
+                    'name' => $customer->name,
                     'phone' => $customer->phone,
                 ],
             ], 201);
@@ -125,7 +125,7 @@ class CustomersController extends Controller
 
         return view('customers.show', [
             'customer' => $customer,
-            'sales'    => $customer->sales()
+            'sales' => $customer->sales()
                 ->with('items')
                 ->latest('sold_at')
                 ->paginate(25),
@@ -138,7 +138,7 @@ class CustomersController extends Controller
         $this->ensureOwned($customer);
 
         return view('customers.form', [
-            'customer'  => $customer,
+            'customer' => $customer,
             'pageTitle' => 'Edit Customer',
             'submitUrl' => route('customers.update', $customer),
         ]);
@@ -155,7 +155,7 @@ class CustomersController extends Controller
             'email' => 'nullable|email|max:255',
             'address' => 'nullable|string|max:255',
             'notes' => 'nullable|string|max:65535',
-            'credit_limit' => 'nullable|integer|min:0',
+            'credit_limit' => 'nullable|numeric|min:0|max:100000000',
             'is_active' => 'boolean',
         ]);
 

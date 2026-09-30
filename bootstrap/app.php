@@ -28,6 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'tenant' => \App\Http\Middleware\EnsureTenantContext::class,
             'platform.admin' => \App\Http\Middleware\EnsurePlatformAdmin::class,
             'plan.feature' => \App\Http\Middleware\RequirePlanFeature::class,
+            'module' => \App\Http\Middleware\EnsureModuleActive::class,
         ]);
         // Route-model binding resolves *after* this middleware, otherwise the
         // BelongsToTenant global scope is not applied yet and a row belonging to

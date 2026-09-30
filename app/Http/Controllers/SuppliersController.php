@@ -42,8 +42,9 @@ class SuppliersController extends Controller
         $this->auth->authorize('suppliers.create');
 
         return view('suppliers.form', [
-            'supplier' => new Supplier(),
+            'supplier' => new Supplier(['is_active' => true]),
             'pageTitle' => 'Add Supplier',
+            'submitUrl' => route('suppliers.store'),
         ]);
     }
 
@@ -74,6 +75,17 @@ class SuppliersController extends Controller
         ]);
     }
 
+    public function show(Supplier $supplier)
+    {
+        $this->auth->authorize('suppliers.view');
+        $this->ensureOwned($supplier);
+
+        return view('suppliers.show', [
+            'supplier' => $supplier,
+            'purchases' => $supplier->purchases()->latest('ordered_at')->paginate(25),
+        ]);
+    }
+
     public function edit(Supplier $supplier)
     {
         $this->auth->authorize('suppliers.update');
@@ -82,6 +94,7 @@ class SuppliersController extends Controller
         return view('suppliers.form', [
             'supplier' => $supplier,
             'pageTitle' => 'Edit Supplier',
+            'submitUrl' => route('suppliers.update', $supplier),
         ]);
     }
 

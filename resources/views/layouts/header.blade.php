@@ -6,7 +6,10 @@
     $workspace = $ctx->tenant();
     $role = $ctx->role();
 
-    $shellTenants = $shellUser ? $shellUser->tenants()->orderBy('tenants.name')->get() : collect();
+    // Only ACTIVE memberships are listed: a workspace the account was removed from
+    // must not reappear here or in the switcher, even though its revoked membership
+    // is kept as history.
+    $shellTenants = $shellUser ? $shellUser->activeTenants()->orderBy('tenants.name')->get() : collect();
     $shellNotifications = $shellUser ? $shellUser->notifications()->latest()->take(5)->get() : collect();
     $shellUnread = $shellUser ? $shellUser->unreadNotifications()->count() : 0;
     $shellInitials = $shellUser
@@ -29,7 +32,12 @@
             @isset($header)
                 {{ $header }}
             @else
-                <h1 class="text-lg font-semibold text-gray-900">{{ config('app.name', 'Cultiv One') }}</h1>
+                {{-- Falls back to the workspace brand name so a customised workspace
+                     still reads as itself on pages that do not supply their own
+                     heading. Outside a workspace the product name is used. --}}
+                <h1 class="text-lg font-semibold text-gray-900">
+                    {{ $workspace ? $workspace->brandName() : config('app.name', 'Cultiv One') }}
+                </h1>
             @endisset
         </div>
 
@@ -82,6 +90,30 @@
             @endif
 
             @auth
+                {{-- Fullscreen lives in the GLOBAL header, never inside a page's own
+                     transaction area: it is an application-level control that is most
+                     useful on /pos but must not compete with the cart, payment fields
+                     or the "Complete sale" button for attention. Desktop shows the
+                     icon; on small screens the same action is available from the user
+                     menu below so the header never gets crowded. Hidden entirely when
+                     the browser has no Fullscreen API, so no dead control is shown. --}}
+                <div x-data="fullscreenToggle" x-init="init()" x-cloak x-show="supported"
+                     class="hidden sm:block">
+                    <button type="button"
+                            @click="toggle()"
+                            class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                            :title="isFullscreen ? @js(__('Exit fullscreen')) : @js(__('Enter fullscreen'))"
+                            :aria-label="isFullscreen ? @js(__('Exit fullscreen')) : @js(__('Enter fullscreen'))"
+                            :aria-pressed="isFullscreen ? 'true' : 'false'">
+                        <template x-if="! isFullscreen">
+                            <x-nav-icon name="fullscreen" class="h-6 w-6" />
+                        </template>
+                        <template x-if="isFullscreen">
+                            <x-nav-icon name="fullscreen-exit" class="h-6 w-6" />
+                        </template>
+                    </button>
+                </div>
+
                 {{-- Notifications (same source as the dashboard panel) --}}
                 <x-dropdown align="right" width="w-80">
                     <x-slot name="trigger">
@@ -106,7 +138,18 @@
                         </div>
 
                         @forelse ($shellNotifications as $notification)
-                            <div class="border-t border-gray-100 px-4 py-2 text-sm text-gray-700">
+                            @php
+                                // Notifications may carry a target (team invitations point
+                                // at /team); those rows become real links.
+                                $notificationTag = ! empty($notification->data['url']) ? 'a' : 'div';
+                                // Stored data is path-only (ngrok-safe); url() prefixes the
+                                // live host at render. Legacy absolute URLs still work as-is.
+                                $notificationHref = isset($notification->data['url'])
+                                    ? url($notification->data['url'])
+                                    : null;
+                            @endphp
+                            <{{ $notificationTag }} @if ($notificationHref) href="{{ $notificationHref }}" @endif
+                                class="block border-t border-gray-100 px-4 py-2 text-sm text-gray-700 {{ $notificationHref ? 'hover:bg-gray-50 focus:bg-gray-50 focus:outline-none' : '' }}">
                                 <div class="flex items-start gap-2">
                                     <span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full {{ $notification->read_at ? 'bg-transparent' : 'bg-indigo-500' }}"></span>
                                     <span class="min-w-0">
@@ -114,7 +157,7 @@
                                         <span class="block text-xs text-gray-400">{{ $notification->created_at->diffForHumans() }}</span>
                                     </span>
                                 </div>
-                            </div>
+                            </{{ $notificationTag }}>
                         @empty
                             <div class="border-t border-gray-100 px-4 py-3 text-sm text-gray-500">
                                 {{ __('Nothing new.') }}
@@ -144,6 +187,31 @@
                             @if ($role)
                                 <div class="mt-1 text-xs text-gray-400">{{ __('Role') }}: {{ $role }}</div>
                             @endif
+                        </div>
+
+                        <div class="border-t border-gray-100 pt-1">
+                            {{-- Install / fullscreen live in the application (user) menu so
+                                 mobile keeps an uncluttered header, and the same entries
+                                 work on every page. Both hide themselves when the browser
+                                 cannot do them, and neither ever prompts on its own. --}}
+                            <div x-data="pwaInstall" x-init="init()" x-cloak x-show="canInstall">
+                                <button type="button" @click="install()"
+                                        class="flex w-full items-center gap-2 px-4 py-2 text-start text-sm text-gray-700 hover:bg-gray-100">
+                                    <x-nav-icon name="download" class="h-4 w-4 text-gray-400" />
+                                    {{ __('Install Cultiv One') }}
+                                </button>
+                            </div>
+
+                            <div x-data="fullscreenToggle" x-init="init()" x-cloak x-show="supported" class="sm:hidden">
+                                <button type="button" @click="toggle()"
+                                        class="flex w-full items-center gap-2 px-4 py-2 text-start text-sm text-gray-700 hover:bg-gray-100">
+                                    <span class="w-4 text-gray-400">
+                                        <x-nav-icon name="fullscreen" class="h-4 w-4" x-show="! isFullscreen" />
+                                        <x-nav-icon name="fullscreen-exit" class="h-4 w-4" x-show="isFullscreen" />
+                                    </span>
+                                    <span x-text="isFullscreen ? @js(__('Exit fullscreen')) : @js(__('Enter fullscreen'))"></span>
+                                </button>
+                            </div>
                         </div>
 
                         <div class="border-t border-gray-100 pt-1">

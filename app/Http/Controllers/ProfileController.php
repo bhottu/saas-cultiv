@@ -13,11 +13,24 @@ class ProfileController extends Controller
 {
     /**
      * Display the user's profile form.
+     *
+     * Also hands the page what the Brand Identity section needs: the active workspace
+     * (branding is per workspace, so there is nothing to edit without one) and
+     * whether this account may change it. /profile sits outside the `tenant` group —
+     * an account with no workspace must still reach its profile — so the check is
+     * made here instead of by middleware.
      */
     public function edit(Request $request): View
     {
+        $ctx = app('tenant.context');
+        $tenant = $ctx->tenant();
+
         return view('profile.edit', [
             'user' => $request->user(),
+            'brandTenant' => $tenant,
+            // `manage_settings` is the existing registry entry for workspace settings;
+            // the role table grants it to Owner and Admin only.
+            'canManageBranding' => $tenant !== null && $ctx->userCan('manage_settings'),
         ]);
     }
 

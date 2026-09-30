@@ -3,8 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\BusinessInvoice;
+use App\Services\AuditLogger;
 use App\Services\BusinessAuthorization;
+use App\Services\Money;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class BusinessInvoicesController extends Controller
 {
@@ -57,6 +60,38 @@ class BusinessInvoicesController extends Controller
         $invoice->load(['customer', 'supplier', 'sale.items.product', 'purchase.items.product', 'payments']);
 
         return view('invoices.show', ['invoice' => $invoice]);
+    }
+
+    public function pay(Request $request, BusinessInvoice $invoice)
+    {
+        $this->auth->authorize('payments.create');
+        $this->ensureOwned($invoice);
+        abort_if($invoice->status === 'cancelled', 422, 'Cancelled invoices cannot receive payment.');
+
+        $data = $request->validate([
+            'method' => ['required', 'string', 'max:30'],
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'reference' => ['nullable', 'string', 'max:100'],
+            'paid_at' => ['nullable', 'date'],
+            'notes' => ['nullable', 'string', 'max:65535'],
+        ]);
+        $amount = Money::centsFromDisplay($data['amount']);
+        abort_if($amount > $invoice->outstanding, 422, 'Payment cannot exceed the outstanding amount.');
+
+        DB::transaction(function () use ($request, $invoice, $data, $amount) {
+            $locked = BusinessInvoice::withoutGlobalScopes()->lockForUpdate()->findOrFail($invoice->id);
+            abort_if($amount > $locked->outstanding, 422, 'Payment cannot exceed the outstanding amount.');
+            $locked->payments()->create(['tenant_id' => $locked->tenant_id, 'method' => $data['method'],
+                'amount' => $amount, 'reference' => $data['reference'] ?? null,
+                'paid_at' => $data['paid_at'] ?? now(), 'created_by' => $request->user()->id, 'notes' => $data['notes'] ?? null]);
+            $paid = (int) $locked->payments()->sum('amount');
+            $locked->update(['amount_paid' => $paid, 'outstanding' => max(0, (int) $locked->total - $paid),
+                'status' => $paid >= (int) $locked->total ? 'paid' : 'partial',
+                'paid_at' => $paid >= (int) $locked->total ? now() : null]);
+        });
+
+        AuditLogger::log('business_invoice.payment.created', $invoice, ['amount' => $amount, 'method' => $data['method']]);
+        return back()->with('status', ['type' => 'success', 'message' => 'Invoice payment recorded.']);
     }
 
     private function ensureOwned(BusinessInvoice $invoice): void

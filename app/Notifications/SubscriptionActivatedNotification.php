@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\Payment;
+use App\Services\Money;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -24,7 +25,7 @@ class SubscriptionActivatedNotification extends Notification implements ShouldQu
         return (new MailMessage)
             ->subject('Payment received — subscription activated')
             ->greeting('Payment successful!')
-            ->line("Your payment of IDR {$this->payment->amount} was confirmed.")
+            ->line('Your payment of '.Money::formatRupiah($this->payment->amount).' was confirmed.')
             ->line('Your subscription is now active.')
             ->action('View billing', route('billing.index'));
     }
@@ -36,7 +37,7 @@ class SubscriptionActivatedNotification extends Notification implements ShouldQu
             'payment_id' => $this->payment->id,
             'amount' => $this->payment->amount,
             'order_id' => $this->payment->order_id,
-            'message' => "Payment of IDR {$this->payment->amount} confirmed — subscription activated.",
+            'message' => 'Payment of '.Money::formatRupiah($this->payment->amount).' confirmed — subscription activated.',
         ];
     }
 }

@@ -33,41 +33,47 @@
                 <div class="md:col-span-2">
                     <x-input-label for="name" :value="__('Name')" />
                     <x-text-input id="name" name="name" type="text" class="mt-1 block w-full"
-                                  :value="old('name', $customer->name)" required />
+                                  :value="old('name', $customer->name)"
+                                  placeholder="{{ __('e.g. Budi Santoso') }}" required />
                     <x-input-error :messages="$errors->get('name')" class="mt-2" />
                 </div>
 
                 <div>
                     <x-input-label for="phone" :value="__('Phone')" />
                     <x-text-input id="phone" name="phone" type="text" class="mt-1 block w-full"
-                                  :value="old('phone', $customer->phone)" />
+                                  :value="old('phone', $customer->phone)"
+                                  placeholder="{{ __('e.g. 081234567890') }}" />
                     <x-input-error :messages="$errors->get('phone')" class="mt-2" />
                 </div>
 
                 <div>
                     <x-input-label for="email" :value="__('Email')" />
                     <x-text-input id="email" name="email" type="email" class="mt-1 block w-full"
-                                  :value="old('email', $customer->email)" />
+                                  :value="old('email', $customer->email)"
+                                  placeholder="{{ __('e.g. budi@example.com') }}" />
                     <x-input-error :messages="$errors->get('email')" class="mt-2" />
                 </div>
 
                 <div class="md:col-span-2">
                     <x-input-label for="address" :value="__('Address')" />
                     <x-text-input id="address" name="address" type="text" class="mt-1 block w-full"
-                                  :value="old('address', $customer->address)" />
+                                  :value="old('address', $customer->address)"
+                                  placeholder="{{ __('e.g. Jl. Merdeka No. 1, Jakarta') }}" />
                     <x-input-error :messages="$errors->get('address')" class="mt-2" />
                 </div>
 
                 <div>
                     <x-input-label for="credit_limit" :value="__('Credit limit (Rp)')" />
                     <x-text-input id="credit_limit" name="credit_limit" type="number" step="0.01" min="0"
-                                  class="mt-1 block w-full" :value="old('credit_limit', $amount($customer->credit_limit))" />
+                                  class="mt-1 block w-full" :value="old('credit_limit', $amount($customer->credit_limit))"
+                                  placeholder="{{ __('e.g. 500000') }}" />
                     <x-input-error :messages="$errors->get('credit_limit')" class="mt-2" />
                 </div>
 
                 <div class="md:col-span-2">
                     <x-input-label for="notes" :value="__('Notes')" />
                     <textarea id="notes" name="notes" rows="3"
+                              placeholder="{{ __('e.g. Prefers WhatsApp contact') }}"
                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">{{ old('notes', $customer->notes) }}</textarea>
                     <x-input-error :messages="$errors->get('notes')" class="mt-2" />
                 </div>

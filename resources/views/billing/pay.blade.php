@@ -6,7 +6,7 @@
     <div class="py-12 max-w-3xl mx-auto sm:px-6 lg:px-8">
         <div class="bg-white rounded-lg shadow p-8 text-center" x-data="paymentPoller('{{ route('billing.payment.status', $payment) }}')">
             <h3 class="text-lg font-bold mb-1">Scan QRIS to pay</h3>
-            <p class="text-sm text-gray-500 mb-4">Amount: <strong>Rp {{ number_format($payment->amount) }}</strong></p>
+            <p class="text-sm text-gray-500 mb-4">Amount: <strong>{{ \App\Services\Money::formatRupiah($payment->amount) }}</strong></p>
 
             {{-- QR code served from provider URL; no API credentials ever reach the browser. --}}
             @php $qr = $payment->payload['create']['qris_url'] ?? null; @endphp

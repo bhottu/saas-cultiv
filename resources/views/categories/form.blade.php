@@ -31,13 +31,15 @@
             <div>
                 <x-input-label for="name" :value="__('Name')" />
                 <x-text-input id="name" name="name" type="text" class="mt-1 block w-full"
-                              :value="old('name', $category->name)" required />
+                              :value="old('name', $category->name)"
+                              placeholder="{{ __('e.g. Kopi & Teh') }}" required />
                 <x-input-error :messages="$errors->get('name')" class="mt-2" />
             </div>
 
             <div>
                 <x-input-label for="description" :value="__('Description')" />
                 <textarea id="description" name="description" rows="3"
+                          placeholder="{{ __('e.g. Hot and cold coffee drinks') }}"
                           class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">{{ old('description', $category->description) }}</textarea>
                 <x-input-error :messages="$errors->get('description')" class="mt-2" />
             </div>

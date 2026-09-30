@@ -44,6 +44,15 @@
         ];
     }
 
+    if ($business->can('warehouses.view')) {
+        $inventory[] = [
+            'label' => __('Warehouses'),
+            'icon' => 'warehouse',
+            'href' => route('warehouses.index'),
+            'active' => request()->routeIs('warehouses.*'),
+        ];
+    }
+
     if ($business->can('categories.view')) {
         $inventory[] = [
             'label' => __('Categories'),
@@ -103,6 +112,52 @@
         ];
     }
 
+    // Advanced reporting + analytics are plan entitlements (Pro/Business). The menu
+    // entries ALWAYS stay visible (subject to the existing RBAC permission) — a Free
+    // user should be able to see what higher plans add — and carry a lock marker
+    // when the workspace lacks the entitlement. The marker is purely a visual
+    // indication: the routes stay gated server-side by the plan.feature middleware,
+    // which answers with the existing upgrade prompt, never with data.
+    $usage = app(\App\Services\UsageService::class);
+    $workspace = app('tenant.context')->tenant();
+
+    // The ONE place an entitlement becomes a navigation lock, so this file can never
+    // grow a second "premium features" list that drifts from the backend's.
+    // Wording note: the hint deliberately does not use the bare word "Available" —
+    // the module centre reserves that exact word for a module STATE ("Available"),
+    // and a generic nav tooltip echoing it would blur the two meanings.
+    $navLock = function (string $feature) use ($usage, $workspace): array {
+        if ($workspace !== null && $usage->allows($workspace, $feature)) {
+            return ['locked' => false];
+        }
+
+        return [
+            'locked' => true,
+            'lock-title' => __('Included in :plans plans.', ['plans' => $usage->featurePlans($feature)])
+                . ' ' . __('Upgrade to unlock it.'),
+        ];
+    };
+
+    $advanced = [];
+
+    if ($business->can('reports.view')) {
+        $advanced[] = [
+            'label' => __('Advanced Reports'),
+            'icon' => 'document-report',
+            'href' => route('reports.index'),
+            'active' => request()->routeIs('reports.*'),
+        ] + $navLock('advanced_reports');
+    }
+
+    if ($business->can('reports.view')) {
+        $advanced[] = [
+            'label' => __('Analytics'),
+            'icon' => 'chart-pie',
+            'href' => route('analytics.index'),
+            'active' => request()->routeIs('analytics.*'),
+        ] + $navLock('advanced_analytics');
+    }
+
     $workspaceItems = [];
 
     if ($inWorkspace) {
@@ -124,6 +179,28 @@
             'href' => route('billing.index'),
             'active' => request()->routeIs('billing.*'),
         ];
+
+        if ($business->can('modules.view')) {
+            $workspaceItems[] = [
+                'label' => __('Modules'),
+                'icon' => 'cube',
+                'href' => route('modules.index'),
+                'active' => request()->routeIs('modules.*'),
+            ];
+        }
+
+        // Audit trail is a governance surface: the entry mirrors exactly what the
+        // controller checks (the audit.view action mapped to the manage_settings
+        // registry verb), so the menu never advertises a page the user can never open.
+        // Without the plan entitlement the entry stays visible, lock-marked.
+        if ($business->can('audit.view')) {
+            $workspaceItems[] = [
+                'label' => __('Audit Log'),
+                'icon' => 'shield-check',
+                'href' => route('audit-logs.index'),
+                'active' => request()->routeIs('audit-logs.*'),
+            ] + $navLock('audit_log');
+        }
     }
 
     $workspaceItems[] = [
@@ -145,7 +222,7 @@
             'icon' => 'key',
             'href' => route('tokens.index'),
             'active' => request()->routeIs('tokens.*'),
-        ],
+        ] + $navLock('api_access'),
     ];
 
     $platform = [];
@@ -159,9 +236,23 @@
         ];
     }
 
+    $moduleManager = app(\App\Services\ModuleManager::class);
+    $moduleItems = $moduleManager->sidebarItems($workspace);
+    foreach ($moduleItems as $mItem) {
+        $targetGroup = strtolower($mItem['group'] ?? 'sales');
+        if ($targetGroup === 'sales') {
+            $sales[] = $mItem;
+        } elseif ($targetGroup === 'inventory') {
+            $inventory[] = $mItem;
+        } else {
+            $workspaceItems[] = $mItem;
+        }
+    }
+
     $navGroups = array_values(array_filter([
         ['label' => __('Overview'), 'items' => $overview],
         ['label' => __('Sales'), 'items' => $sales],
+        ['label' => __('Insights'), 'items' => $advanced],
         ['label' => __('Inventory'), 'items' => $inventory],
         ['label' => __('Workspace'), 'items' => $workspaceItems],
         ['label' => __('Account'), 'items' => $account],

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\TenantUser;
 use App\Services\BusinessAuthorization;
 use App\Services\SalesDashboardService;
 use App\Services\UsageService;
@@ -39,6 +40,12 @@ class DashboardController extends Controller
             'recentPayments' => $tenant->payments()->latest()->take(5)->get(),
             'recentInvoices' => $tenant->invoices()->latest()->take(5)->get(),
             'notifications' => $request->user()->notifications()->latest()->take(8)->get(),
+            'pendingInvitations' => TenantUser::query()
+                ->with(['tenant:id,name', 'invitedBy:id,name'])
+                ->where('user_id', $request->user()->id)
+                ->where('status', 'invited')
+                ->latest()
+                ->get(),
             'salesOverview' => $salesOverview,
         ]);
     }

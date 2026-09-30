@@ -8,6 +8,11 @@
                 </p>
             </div>
 
+            {{-- Resolved here rather than reused from `$business` below: the header slot
+                 is rendered before the page body, so it cannot rely on a variable the
+                 body defines. --}}
+            @php $canCreateSale = app(\App\Services\BusinessAuthorization::class)->can('sales.create'); @endphp
+
             <div class="flex shrink-0 flex-wrap items-center gap-2">
                 <a href="{{ route('sales.index') }}" class="text-sm text-gray-600 underline">{{ __('Back to sales') }}</a>
                 <a href="{{ route('sales.print', $sale) }}" target="_blank" rel="noopener"
@@ -18,6 +23,17 @@
                     <a href="{{ route('sales.return', $sale) }}"
                        class="inline-flex items-center rounded-lg border border-amber-500 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50">
                         {{ __('Return / refund items') }}
+                    </a>
+                @endif
+
+                {{-- Creating a sale is usually a batch job (several orders in a row),
+                     and the detail page is where the user lands after each one. Same
+                     label and button style as /sales, gated on the same
+                     `sales.create` permission. --}}
+                @if ($canCreateSale)
+                    <a href="{{ route('sales.create') }}"
+                       class="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                        {{ __('New sale') }}
                     </a>
                 @endif
             </div>

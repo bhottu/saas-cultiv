@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Concerns\BelongsToTenant;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -23,6 +24,31 @@ class Product extends Model
         'track_inventory'  => 'boolean',
         'is_active'        => 'boolean',
     ];
+
+    /**
+     * Case-insensitive partial search over name, sku and barcode.
+     *
+     * PostgreSQL's LIKE is case-sensitive (MySQL's and SQLite's are not), so every
+     * product search in the app routes through this ONE scope: LOWER(col) LIKE ?
+     * with a lowercased binding behaves identically on every supported driver, making
+     * "kopi", "KOPI" and "Kopi" equivalent. The term is always bound, never interpolated.
+     */
+    public function scopeSearch(Builder $query, ?string $term): Builder
+    {
+        $term = trim((string) $term);
+
+        if ($term === '') {
+            return $query;
+        }
+
+        $needle = '%'.mb_strtolower($term).'%';
+
+        return $query->where(function (Builder $q) use ($needle) {
+            $q->whereRaw('LOWER(name) LIKE ?', [$needle])
+                ->orWhereRaw('LOWER(sku) LIKE ?', [$needle])
+                ->orWhereRaw('LOWER(barcode) LIKE ?', [$needle]);
+        });
+    }
 
     /**
      * Current balance for the default warehouse (read-only summary).

@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call(PlanSeeder::class);
+        $this->call(ModuleSeeder::class);
 
         // Platform admin for the /admin panel.
         User::updateOrCreate(

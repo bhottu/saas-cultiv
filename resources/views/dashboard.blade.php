@@ -29,6 +29,9 @@
             <div class="rounded-lg bg-green-100 p-3 text-green-800">{{ session('success') }}</div>
         @endif
 
+        {{-- Invitations to other workspaces addressed to this user: Accept/Reject right here. --}}
+        <x-pending-invitations :invitations="$pendingInvitations" />
+
         {{-- Summary --}}
         <div class="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
             {{-- Subscription --}}
@@ -127,7 +130,13 @@
                 <ul class="divide-y divide-gray-100 text-sm">
                     @forelse ($notifications as $n)
                         <li class="py-2 text-gray-700">
-                            {{ $n->data['message'] ?? __('Notification') }}
+                            @if (! empty($n->data['url']))
+                                <a href="{{ url($n->data['url']) }}" class="text-indigo-600 hover:underline">
+                                    {{ $n->data['message'] ?? __('Notification') }}
+                                </a>
+                            @else
+                                {{ $n->data['message'] ?? __('Notification') }}
+                            @endif
                             <span class="block text-xs text-gray-400">{{ $n->created_at->diffForHumans() }}</span>
                         </li>
                     @empty

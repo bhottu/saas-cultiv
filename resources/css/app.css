@@ -1,3 +1,18 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/*
+ * Alpine's cloak: hide an element until Alpine has initialised it.
+ *
+ * Declared once, globally, because several controls depend on it to avoid flashing a
+ * control they may end up hiding — the POS barcode scanner modal (which previously
+ * carried its own copy of this rule) and the install / fullscreen buttons, which stay
+ * hidden until the browser reports it can actually perform the action.
+ *
+ * Without this rule `x-show` only takes effect once Alpine boots, so a hidden-until-
+ * supported button would be briefly visible as a dead control.
+ */
+[x-cloak] {
+    display: none !important;
+}

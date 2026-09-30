@@ -58,12 +58,14 @@ return [
         'suppliers.create'        => 'create_records',
         'suppliers.update'        => 'update_records',
         'suppliers.delete'        => 'delete_records',
+        'suppliers.delete'        => 'delete_records',
         'suppliers.export'        => 'view_records',
 
         'purchases.view'          => 'view_records',
         'purchases.create'        => 'create_records',
         'purchases.receive'       => 'update_records',
         'purchases.cancel'        => 'update_records',
+        'purchases.delete'        => 'delete_records',
         'purchases.export'        => 'view_records',
 
         'sales.view'              => 'view_records',
@@ -81,12 +83,20 @@ return [
 
         'expenses.view'           => 'view_records',
         'expenses.create'         => 'create_records',
+        'expenses.update'         => 'update_records',
         'expenses.delete'         => 'delete_records',
 
         'reports.view'            => 'view_reports',
         'reports.export'          => 'view_reports',
 
+        // Audit trail is a governance surface: it is restricted to the same registry
+        // verb as workspace settings, so a plain Manager/Staff account cannot read it.
+        'audit.view'              => 'manage_settings',
+        'audit.export'            => 'manage_settings',
+
         'business_settings.manage'=> 'manage_settings',
+        'modules.view'            => 'manage_settings',
+        'modules.manage'          => 'manage_settings',
     ],
 
     // Sales module options — the single source of truth for the UI selects AND the

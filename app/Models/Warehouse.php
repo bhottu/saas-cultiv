@@ -24,11 +24,6 @@ class Warehouse extends Model
         return $query->where('is_active', true);
     }
 
-    public function products(): HasMany
-    {
-        return $this->hasMany(Product::class);
-    }
-
     public function stockBalances(): HasMany
     {
         return $this->hasMany(StockBalance::class);
@@ -37,6 +32,14 @@ class Warehouse extends Model
     public function stockMovements(): HasMany
     {
         return $this->hasMany(StockMovement::class);
+    }
+
+    /** Products stocked in this warehouse through their balance rows. */
+    public function products(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Product::class, 'stock_balances')
+            ->withPivot(['quantity', 'incoming', 'outgoing'])
+            ->withTimestamps();
     }
 
     public function tenant(): BelongsTo

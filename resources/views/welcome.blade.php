@@ -49,6 +49,20 @@
                     <a href="{{ route('register') }}" class="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold">Start free</a>
                     <a href="{{ route('login') }}" class="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 font-semibold">Log in</a>
                 @endauth
+
+                {{-- Install CTA, placed in the hero next to the primary actions. It only
+                     renders once the browser has actually offered an install prompt, so
+                     browsers that cannot install Cultiv One never see a dead button.
+                     Named for the whole SaaS, not for POS. --}}
+                <div x-data="pwaInstall" x-init="init()" x-cloak x-show="canInstall">
+                    <button type="button" @click="install()"
+                            class="px-6 py-3 border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 font-semibold inline-flex items-center gap-2">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                        {{ __('Install Cultiv One') }}
+                    </button>
+                </div>
             </div>
         </section>
 
@@ -62,17 +76,15 @@
                         <p class="text-sm text-gray-500 mt-1 mb-3">{{ $plan->description }}</p>
                         <div class="text-2xl font-extrabold mb-4">
                             @if ($plan->price_monthly > 0)
-                                Rp {{ number_format($plan->price_monthly) }}
+                                {{ \App\Services\Money::formatRupiah($plan->price_monthly) }}
                                 <span class="text-sm font-normal text-gray-500">/month</span>
                             @else
                                 Free
                             @endif
                         </div>
-                        <ul class="text-sm text-gray-600 space-y-1.5 mb-6 flex-1">
-                            @foreach ($plan->features ?? [] as $feature)
-                                <li class="flex gap-2"><span class="text-green-500">✓</span> {{ $feature }}</li>
-                            @endforeach
-                        </ul>
+                        <div class="mb-6 flex-1">
+                            <x-plan-capabilities :plan="$plan" />
+                        </div>
                         <a href="{{ auth()->check() ? route('billing.index') : route('register') }}"
                            class="text-center px-4 py-2 rounded-lg font-semibold text-sm
                                   {{ $plan->slug === 'pro' ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'border border-gray-300 hover:bg-gray-50' }}">

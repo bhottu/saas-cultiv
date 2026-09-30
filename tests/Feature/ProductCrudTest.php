@@ -11,6 +11,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Warehouse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
@@ -94,9 +95,17 @@ class ProductCrudTest extends TestCase
 
     public function test_create_form_renders(): void
     {
-        $this->asMember($this->tenant)->get('/products/create')
+        $html = $this->asMember($this->tenant)->get('/products/create')
             ->assertOk()
-            ->assertSee('Add Product');
+            ->assertSee('Add Product')
+            ->getContent();
+
+        // Placeholder examples guide the important inputs: name, SKU, prices, stock.
+        $this->assertStringContainsString('placeholder="e.g. Kopi Arabika 250g"', $html);
+        $this->assertStringContainsString('placeholder="e.g. SKU-KOPI-250"', $html);
+        $this->assertStringContainsString('placeholder="e.g. 15000"', $html);
+        $this->assertStringContainsString('placeholder="e.g. 25000"', $html);
+        $this->assertStringContainsString('placeholder="e.g. 5"', $html);
     }
 
     public function test_store_creates_product_and_converts_money_to_cents(): void
@@ -180,6 +189,48 @@ class ProductCrudTest extends TestCase
         $product->refresh();
         $this->assertSame('Kopi Susu Gula Aren', $product->name);
         $this->assertSame(2_000_000, $product->selling_price);
+    }
+
+    /**
+     * Saving a product lands on its detail page; without a shortcut the next one means
+     * going back through /products first.
+     */
+    public function test_the_product_detail_offers_a_direct_shortcut_to_adding_another(): void
+    {
+        $product = $this->makeProduct();
+
+        $html = $this->asMember($this->tenant)->get("/products/{$product->id}")
+            ->assertOk()->getContent();
+
+        $this->assertStringContainsString(route('products.create'), $html);
+        $this->assertStringContainsString('Add product', $html);
+
+        // The existing actions are untouched.
+        $this->assertStringContainsString(route('products.edit', $product), $html);
+        $this->assertStringContainsString(route('products.index'), $html);
+
+        // ...and the shortcut lands on the create form.
+        $this->asMember($this->tenant)->get(route('products.create'))->assertOk();
+    }
+
+    public function test_the_product_detail_hides_the_shortcut_from_a_viewer(): void
+    {
+        $product = $this->makeProduct();
+
+        $viewer = User::create([
+            'name' => 'Viewer', 'email' => 'viewer-shortcut@test.dev',
+            'password' => Hash::make('password'), 'email_verified_at' => now(),
+        ]);
+        $this->tenant->users()->attach($viewer->id, [
+            'role' => 'Viewer', 'status' => 'active', 'joined_at' => now(),
+        ]);
+
+        $html = $this->asMember($this->tenant, $viewer)->get("/products/{$product->id}")
+            ->assertOk()->getContent();
+
+        // A Viewer may not open the create form, so the button would dead-end on 403.
+        $this->assertStringNotContainsString(route('products.create'), $html);
+        $this->assertStringContainsString(route('products.index'), $html);
     }
 
     public function test_destroy_is_blocked_while_stock_on_hand_and_allowed_when_empty(): void
@@ -323,5 +374,68 @@ class ProductCrudTest extends TestCase
         $this->asMember($this->tenant)->get('/products?active_only=1')
             ->assertOk()
             ->assertSee('Kopi Susu');
+    }
+
+    /**
+     * PostgreSQL's LIKE is case-sensitive (SQLite's and MySQL's are not), so a raw
+     * `name LIKE '%Kopi%'` found nothing for 'kopi' on the production database.
+     * Behaviour AND mechanism are both pinned: the SQL must fold both sides with
+     * LOWER(), because SQLite alone would mask a regression to plain LIKE.
+     */
+    public function test_index_search_is_case_insensitive_and_folds_case_in_sql(): void
+    {
+        $this->makeProduct(); // Kopi Susu / KP-001
+        $this->makeProduct(['name' => 'Teh Manis', 'sku' => 'TH-001']);
+
+        $this->asMember($this->tenant)->get('/products?search=kOpI')
+            ->assertOk()
+            ->assertSee('Kopi Susu')
+            ->assertDontSee('Teh Manis');
+
+        $this->asMember($this->tenant)->get('/products?search=th-001')
+            ->assertOk()
+            ->assertSee('Teh Manis')
+            ->assertDontSee('Kopi Susu');
+
+        $statements = [];
+        DB::listen(function ($query) use (&$statements) {
+            $statements[] = $query->sql;
+        });
+
+        $this->asMember($this->tenant)->get('/products?search=Kopi')->assertOk();
+
+        $this->assertTrue(
+            collect($statements)->contains(fn (string $sql) => str_contains(strtolower($sql), 'lower(name) like')),
+            'Product search must use LOWER(name) LIKE so PostgreSQL matches case-insensitively.'
+        );
+    }
+
+    /**
+     * Rp 25.000.000 is stored as 2.500.000.000 CENTS — beyond the old signed 32-bit
+     * integer column (max 2.147.483.647), which overflowed on PostgreSQL with
+     * "Input value 2500000000 is out of range". The money columns are BIGINT now.
+     */
+    public function test_prices_above_two_billion_cents_round_trip(): void
+    {
+        $this->asMember($this->tenant)->post('/products', [
+            'name' => 'Espresso Machine Pro',
+            'sku' => 'PRM-25M',
+            'unit' => 'pcs',
+            'purchase_price' => '25000000',
+            'selling_price' => '25000000.50',
+            'track_inventory' => '1',
+            'is_active' => '1',
+        ])->assertSessionHasNoErrors();
+
+        $product = Product::withoutGlobalScopes()->where('sku', 'PRM-25M')->firstOrFail();
+
+        $this->assertSame(2_500_000_000, $product->purchase_price);
+        $this->assertSame(2_500_000_050, $product->selling_price);
+        $this->assertSame(2_500_000_000, $product->cost_price); // falls back to purchase price
+
+        // The edit form re-displays the exact stored value, not a truncated one.
+        $this->asMember($this->tenant)->get("/products/{$product->id}/edit")
+            ->assertOk()
+            ->assertSee('value="25000000.50"', false);
     }
 }

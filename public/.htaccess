@@ -22,4 +22,28 @@
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
+
+    # ---------------------------------------------------------------------------
+    # Cultiv One PWA
+    # ---------------------------------------------------------------------------
+    # The worker itself must never be cached, or clients can be pinned to an old
+    # strategy (including an old cache policy) indefinitely.
+    <FilesMatch "^sw\.js$">
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+    </FilesMatch>
+
+    # The manifest is what makes the app installable; a stale copy can advertise the
+    # wrong name, start_url or icons after a release.
+    <FilesMatch "^manifest\.json$">
+        Header set Cache-Control "no-cache"
+        Header set Content-Type "application/manifest+json"
+    </FilesMatch>
+</IfModule>
+
+<IfModule mod_headers.c>
+    # Install icons may be cached long: they are content-addressed by name and
+    # contain no tenant data.
+    <FilesMatch "\.(png|svg|ico)$">
+        Header set Cache-Control "public, max-age=604800"
+    </FilesMatch>
 </IfModule>

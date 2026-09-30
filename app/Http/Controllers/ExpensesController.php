@@ -6,6 +6,7 @@ use App\Services\AuditLogger;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
 use App\Services\BusinessAuthorization;
+use App\Services\Money;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -56,14 +57,7 @@ class ExpensesController extends Controller
     {
         $this->auth->authorize('expenses.create');
 
-        $validated = $request->validate([
-            'category_id' => 'nullable|exists:expense_categories,id',
-            'description' => 'required|string|max:255',
-            'amount' => 'required|integer|min:1',
-            'expense_date' => 'required|date',
-            'payment_method' => 'nullable|in:cash,bank,transfer,qris,other',
-            'notes' => 'nullable|string|max:65535',
-        ]);
+        $validated = $request->validate($this->rules($request));
 
         $tenant = $request->user()->currentTenant;
 
@@ -72,10 +66,10 @@ class ExpensesController extends Controller
                 'tenant_id' => $tenant->id,
                 'category_id' => $validated['category_id'],
                 'description' => $validated['description'],
-                'amount' => (int) $validated['amount'],
+                'amount' => \App\Services\Money::centsFromDisplay($validated['amount']),
                 'expense_date' => $validated['expense_date'],
-                'payment_method' => $validated['payment_method'],
-                'notes' => $validated['notes'],
+                'payment_method' => $validated['payment_method'] ?? 'cash',
+                'notes' => $validated['notes'] ?? null,
                 'created_by' => auth()->id(),
             ]);
         });
@@ -83,6 +77,16 @@ class ExpensesController extends Controller
         AuditLogger::log('expense.created', $expense, ['amount' => $expense->amount, 'category' => $expense->category?->name]);
 
         return redirect()->route('expenses.index')->with('status', ['type' => 'success', 'message' => 'Expense recorded.']);
+    }
+
+    public function show(Expense $expense)
+    {
+        $this->auth->authorize('expenses.view');
+        $this->ensureOwned($expense);
+
+        return view('expenses.show', [
+            'expense' => $expense->load(['category', 'createdBy']),
+        ]);
     }
 
     public function edit(Expense $expense)
@@ -105,16 +109,11 @@ class ExpensesController extends Controller
         $this->auth->authorize('expenses.update');
         $this->ensureOwned($expense);
 
-        $validated = $request->validate([
-            'category_id' => 'nullable|exists:expense_categories,id',
-            'description' => 'required|string|max:255',
-            'amount' => 'required|integer|min:1',
-            'expense_date' => 'required|date',
-            'payment_method' => 'nullable|in:cash,bank,transfer,qris,other',
-            'notes' => 'nullable|string|max:65535',
-        ]);
+        $validated = $request->validate($this->rules($request));
 
-        $expense->update($validated);
+        $expense->update(array_merge($validated, [
+            'amount' => \App\Services\Money::centsFromDisplay($validated['amount']),
+        ]));
 
         AuditLogger::log('expense.updated', $expense, ['amount' => $expense->amount]);
 
@@ -131,6 +130,18 @@ class ExpensesController extends Controller
         $expense->delete();
 
         return redirect()->route('expenses.index')->with('status', ['type' => 'success', 'message' => 'Expense deleted.']);
+    }
+
+    private function rules(Request $request): array
+    {
+        return [
+            'category_id' => ['nullable', 'integer', \Illuminate\Validation\Rule::exists('expense_categories', 'id')->where(fn ($query) => $query->where('tenant_id', $request->user()->currentTenant->id))],
+            'description' => 'required|string|max:255',
+            'amount' => 'required|numeric|min:0.01',
+            'expense_date' => 'required|date',
+            'payment_method' => 'nullable|in:cash,bank,transfer,qris,other',
+            'notes' => 'nullable|string|max:65535',
+        ];
     }
 
     private function tenantId(Request $request): int
