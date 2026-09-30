@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\PaymentProviderException;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -23,14 +24,25 @@ class QrisPwClient
             ->post(config('services.qrispw.endpoints.create'), $payload);
 
         if (! $response->successful()) {
-            Log::error('qrispw.create.failed', ['status' => $response->status(), 'body' => $response->body()]);
-            throw new \RuntimeException("QRIS.PW create-payment failed (HTTP {$response->status()}).");
+            // The provider body is logged for the operator; it is echoed nowhere near the
+            // response, and the exception message carries only the status code.
+            Log::error('qrispw.create.failed', [
+                'status' => $response->status(),
+                'body' => mb_substr((string) $response->body(), 0, 500),
+            ]);
+
+            throw PaymentProviderException::fromProviderResponse($response->status(), 'create-payment');
         }
 
         $data = $response->json();
 
         if (empty($data['success'])) {
-            throw new \RuntimeException('QRIS.PW create-payment rejected: '.($data['error'] ?? 'unknown'));
+            Log::error('qrispw.create.rejected', [
+                'status' => $response->status(),
+                'error' => $data['error'] ?? 'unknown',
+            ]);
+
+            throw new PaymentProviderException('QRIS.PW create-payment rejected: '.($data['error'] ?? 'unknown'));
         }
 
         return $data;
@@ -47,7 +59,7 @@ class QrisPwClient
             ->get(config('services.qrispw.endpoints.status'), ['transaction_id' => $transactionId]);
 
         if (! $response->successful()) {
-            throw new \RuntimeException("QRIS.PW check-payment failed (HTTP {$response->status()}).");
+            throw PaymentProviderException::fromProviderResponse($response->status(), 'check-payment');
         }
 
         return $response->json() ?? [];

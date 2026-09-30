@@ -32,12 +32,37 @@
             @endif
         </div>
 
-        {{-- Pending payment --}}
+        {{-- Unsettled payment notice.
+             The controller already decided what this is: a live pending payment, or one
+             whose window has closed. The QR link is therefore rendered only when the
+             payment is genuinely still payable, and never for an expired one. Dismissal
+             posts to the server (dismissed_notifications) so the notice stays gone after
+             a refresh — it is a real form post, not a JS visibility toggle, and it does
+             not touch the payment or invoice records. --}}
         @if ($pendingPayment)
-            <div class="bg-yellow-50 border border-yellow-300 rounded-lg p-6">
-                <h3 class="font-semibold">Pending payment — {{ \App\Services\Money::formatRupiah($pendingPayment->amount) }}</h3>
-                <p class="text-sm text-gray-600">Expires {{ $pendingPayment->expires_at?->format('H:i') }}.
-                    <a class="text-indigo-600 underline" href="{{ route('billing.pay', $pendingPayment) }}">Show QR code →</a></p>
+            @php $noticeExpired = $pendingPayment->status !== 'pending'; @endphp
+            <div class="{{ $noticeExpired ? 'bg-gray-50 border-gray-300' : 'bg-yellow-50 border-yellow-300' }} border rounded-lg p-6">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <h3 class="font-semibold">
+                            {{ $noticeExpired ? 'Payment expired' : 'Pending payment' }} — {{ \App\Services\Money::formatRupiah($pendingPayment->amount) }}
+                        </h3>
+                        @if ($noticeExpired)
+                            <p class="text-sm text-gray-600">Expired — this payment can no longer be completed. Subscribe again to get a new QR code.</p>
+                        @else
+                            <p class="text-sm text-gray-600">
+                                Expires {{ $pendingPayment->expires_at?->format('H:i') }}.
+                                <a class="text-indigo-600 underline" href="{{ route('billing.pay', $pendingPayment) }}">Show QR code →</a>
+                            </p>
+                        @endif
+                    </div>
+                    <form method="POST" action="{{ route('billing.notice.dismiss') }}">
+                        @csrf
+                        <input type="hidden" name="key" value="{{ $pendingPayment->id }}">
+                        <button type="submit" aria-label="Dismiss payment notice"
+                                class="text-gray-500 hover:text-gray-800 text-lg leading-none px-1">&times;</button>
+                    </form>
+                </div>
             </div>
         @endif
 

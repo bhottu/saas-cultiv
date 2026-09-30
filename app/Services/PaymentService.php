@@ -19,7 +19,9 @@ use Illuminate\Support\Str;
  */
 class PaymentService
 {
-    public function __construct(private readonly QrisPwClient $client) {}
+    public function __construct(
+        private readonly QrisPwClient $client,
+    ) {}
 
     /** Create invoice + pending QRIS payment for a plan checkout. */
     public function createCheckout(Tenant $tenant, Plan $plan, string $cycle, $user): Payment
@@ -32,31 +34,38 @@ class PaymentService
 
         $amount = $plan->priceFor($cycle);
 
-        $invoice = Invoice::create([
-            'tenant_id' => $tenant->id,
-            'invoice_number' => $this->nextInvoiceNumber(),
-            'amount' => $amount,
-            'currency' => $plan->currency,
-            'status' => 'open',
-            'description' => "{$plan->name} ({$cycle}) subscription",
-            'metadata' => ['plan_id' => $plan->id, 'billing_cycle' => $cycle],
-            'due_at' => now()->addHours(1),
-        ]);
+        // The invoice, the payment and the provider hand-off have to succeed or leave
+        // nothing behind. Previously a gateway refusal (401 with no API key, timeout,
+        // rate limit) blew up after the rows were already written, so every failed
+        // attempt left an open invoice and a pending payment with no QR, and the
+        // pending-payment notice then pointed at a payment nobody could pay.
+        return DB::transaction(function () use ($tenant, $plan, $cycle, $user, $amount) {
+            $invoice = Invoice::create([
+                'tenant_id' => $tenant->id,
+                'invoice_number' => $this->nextInvoiceNumber(),
+                'amount' => $amount,
+                'currency' => $plan->currency,
+                'status' => 'open',
+                'description' => "{$plan->name} ({$cycle}) subscription",
+                'metadata' => ['plan_id' => $plan->id, 'billing_cycle' => $cycle],
+                'due_at' => now()->addHours(1),
+            ]);
 
-        $payment = Payment::create([
-            'tenant_id' => $tenant->id,
-            'user_id' => $user->id,
-            'invoice_id' => $invoice->id,
-            'provider' => 'qrispw',
-            'order_id' => 'ORD-'.strtoupper(Str::random(14)),
-            'amount' => $amount,
-            'currency' => $plan->currency,
-            'status' => 'pending',
-        ]);
+            $payment = Payment::create([
+                'tenant_id' => $tenant->id,
+                'user_id' => $user->id,
+                'invoice_id' => $invoice->id,
+                'provider' => 'qrispw',
+                'order_id' => 'ORD-'.strtoupper(Str::random(14)),
+                'amount' => $amount,
+                'currency' => $plan->currency,
+                'status' => 'pending',
+            ]);
 
-        $this->dispatchToProvider($payment);
+            $this->dispatchToProvider($payment);
 
-        return $payment->refresh();
+            return $payment->refresh();
+        });
     }
 
     /** Call QRIS.PW create-payment and store the QR + expiration. */
@@ -141,13 +150,30 @@ class PaymentService
         });
     }
 
-    /** Portable atomic numbering: upsert year row, lock, increment. */
+    /**
+     * Portable atomic numbering: make sure the year row exists, lock it, increment.
+     *
+     * The row must be created with insertOrIgnore, NOT upsert. Two reasons, both learned
+     * the hard way on the live site:
+     *
+     *  1. `upsert($values, ['year'], [])` — an empty update list — makes Laravel's
+     *     Builder short-circuit to a plain INSERT and drop the conflict target, so the
+     *     second checkout of a year died on `invoice_sequences_pkey` (HTTP 500).
+     *  2. `upsert($values, ['year'], ['last_number'])` compiles to
+     *     `ON CONFLICT (year) DO UPDATE SET last_number = excluded.last_number`, and
+     *     `excluded` here is the 0 we were inserting — so the counter was reset to 0 on
+     *     every checkout and the SAME invoice number was handed out twice.
+     *
+     * `insertOrIgnore` is `ON CONFLICT DO NOTHING`: it seeds the counter once and never
+     * rewinds it, so both the crash and the duplicate number are gone. The row lock below
+     * then makes the read-modify-write atomic between concurrent checkouts.
+     */
     private function nextInvoiceNumber(): string
     {
         return DB::transaction(function () {
             $year = now()->year;
 
-            DB::table('invoice_sequences')->upsert(['year' => $year, 'last_number' => 0], ['year'], []);
+            DB::table('invoice_sequences')->insertOrIgnore(['year' => $year, 'last_number' => 0]);
 
             $current = (int) DB::table('invoice_sequences')->where('year', $year)->lockForUpdate()->value('last_number');
             $next = $current + 1;

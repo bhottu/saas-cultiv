@@ -82,6 +82,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware('throttle:billing')->group(function () {
             Route::get('/billing', [BillingController::class, 'index'])->name('billing.index');
             Route::post('/billing/checkout', [BillingController::class, 'checkout'])->name('billing.checkout');
+        Route::post('/billing/notices/dismiss', [BillingController::class, 'dismissNotice'])->name('billing.notice.dismiss');
             Route::get('/billing/payments/{payment}', [BillingController::class, 'showPayment'])->name('billing.pay');
             Route::get('/billing/payments/{payment}/status', [BillingController::class, 'paymentStatus'])->name('billing.payment.status');
             Route::post('/billing/payments/{payment}/check', [BillingController::class, 'checkPayment'])->name('billing.payment.check');
