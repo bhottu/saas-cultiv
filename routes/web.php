@@ -79,14 +79,30 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/team/{membership}/permanent', [TeamController::class, 'forceDelete'])
             ->name('team.force-destroy');
 
-        Route::middleware('throttle:billing')->group(function () {
+        // Billing is split into two buckets on purpose.
+        //
+        // `billing.read` guards the plain page views: they cost one database query and
+        // never touch the payment provider, so they get a generous ceiling instead of
+        // the tiny payment bucket.
+        //
+        // `billing.checkout` guards the calls that reach QRIS.PW (create-payment is capped
+        // at 100 req/min by the provider). These previously shared ONE 5/min bucket with
+        // the page views, so simply reloading /billing a few times consumed the whole
+        // budget and the next Subscribe returned 429. Splitting them keeps real
+        // protection in front of the provider while a browser reload can no longer lock a
+        // paying customer out of their own billing page.
+        Route::middleware('throttle:billing.read')->group(function () {
             Route::get('/billing', [BillingController::class, 'index'])->name('billing.index');
-            Route::post('/billing/checkout', [BillingController::class, 'checkout'])->name('billing.checkout');
-        Route::post('/billing/notices/dismiss', [BillingController::class, 'dismissNotice'])->name('billing.notice.dismiss');
             Route::get('/billing/payments/{payment}', [BillingController::class, 'showPayment'])->name('billing.pay');
             Route::get('/billing/payments/{payment}/status', [BillingController::class, 'paymentStatus'])->name('billing.payment.status');
+            Route::post('/billing/notices/dismiss', [BillingController::class, 'dismissNotice'])->name('billing.notice.dismiss');
+        });
+
+        Route::middleware('throttle:billing.checkout')->group(function () {
+            Route::post('/billing/checkout', [BillingController::class, 'checkout'])->name('billing.checkout');
+            Route::post('/billing/checkout/resolve', [BillingController::class, 'resolveCheckout'])->name('billing.checkout.resolve');
             Route::post('/billing/payments/{payment}/check', [BillingController::class, 'checkPayment'])->name('billing.payment.check');
-                });
+        });
 
         // Business Management — all inherit auth, verified, tenant (server-side enforced).
         Route::resource('products', ProductsController::class);

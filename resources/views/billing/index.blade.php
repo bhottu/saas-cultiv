@@ -7,6 +7,14 @@
         @if (session('success'))
             <div class="bg-green-100 text-green-800 p-3 rounded">{{ session('success') }}</div>
         @endif
+        @if (session('error'))
+            <div class="bg-red-100 text-red-800 p-3 rounded">{{ session('error') }}</div>
+        @endif
+        @if (session('status'))
+            <div class="p-3 rounded {{ ($status['type'] ?? 'success') === 'error' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800' }}">
+                {{ $status['message'] ?? '' }}
+            </div>
+        @endif
 
         {{-- Current subscription --}}
         <div class="bg-white rounded-lg shadow p-6">
@@ -64,6 +72,46 @@
                     </form>
                 </div>
             </div>
+        @endif
+
+        {{-- "You already have a payment waiting" confirmation.
+             Shown instead of a 429 when Subscribe is pressed while an unsettled payment
+             exists. The plan and cycle the customer actually chose are carried in the form
+             so either button continues that exact intent. The payment id is re-validated
+             server-side on submit — this is a convenience prompt, not the enforcement. --}}
+        @if ($pendingCheckout = session('pending_checkout'))
+            <x-modal name="pending-checkout" :show="true" maxWidth="lg">
+                <form method="POST" action="{{ route('billing.checkout.resolve') }}">
+                    @csrf
+                    <input type="hidden" name="payment_id" value="{{ $pendingCheckout['payment_id'] }}">
+                    <input type="hidden" name="plan" value="{{ $pendingCheckout['plan'] }}">
+                    <input type="hidden" name="cycle" value="{{ $pendingCheckout['cycle'] }}">
+
+                    <div class="p-6">
+                        <h3 class="text-lg font-medium text-gray-900">{{ __('Pembayaran Masih Menunggu') }}</h3>
+                        <p class="mt-2 text-sm text-gray-600">
+                            {{ __('Anda memiliki 1 pesanan yang menunggu pembayaran.') }}<br>
+                            {{ __('Apakah Anda ingin membatalkan pesanan sebelumnya dan membuat pesanan baru?') }}
+                        </p>
+                        <p class="mt-3 text-sm text-gray-500">
+                            {{ \App\Services\Money::formatRupiah($pendingCheckout['amount']) }}
+                        </p>
+                    </div>
+
+                    <div class="bg-gray-50 px-6 py-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                        {{-- Plain submit buttons carrying name="intent". A JS
+                             form.submit() is deliberately NOT used: it bypasses the
+                             submitter and would drop the intent value entirely. --}}
+                        <x-secondary-button type="submit" name="intent" value="continue">
+                            {{ __('Lanjut Bayar') }}
+                        </x-secondary-button>
+
+                        <x-danger-button type="submit" name="intent" value="replace">
+                            {{ __('Batalkan & Buat Baru') }}
+                        </x-danger-button>
+                    </div>
+                </form>
+            </x-modal>
         @endif
 
         {{-- Plans --}}

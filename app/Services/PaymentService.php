@@ -19,9 +19,80 @@ use Illuminate\Support\Str;
  */
 class PaymentService
 {
+    /** Terminal states: a payment that reached one of these can never be cancelled. */
+    public const SETTLED_STATUSES = ['paid', 'completed', 'successful', 'settlement'];
+
+    /** States that may still be abandoned by the customer. */
+    public const UNSETTLED_STATUSES = ['pending', 'expired'];
+
     public function __construct(
         private readonly QrisPwClient $client,
     ) {}
+
+    /**
+     * The one payment that currently blocks a new checkout for this workspace, if any.
+     *
+     * Scoped to the tenant on purpose — another workspace's payment must never be seen
+     * here, and the BelongsToTenant global scope backs that up. Status AND expiration
+     * both matter: a row still saying "pending" whose window has closed is not a live
+     * obligation, so stale rows are settled to "expired" first and the caller always
+     * gets an honest, up-to-date answer.
+     */
+    public function activePending(Tenant $tenant): ?Payment
+    {
+        $stale = $tenant->payments()->where('status', 'pending')->get();
+
+        foreach ($stale as $payment) {
+            if ($payment->isExpired()) {
+                $this->markExpired($payment);
+            }
+        }
+
+        return $tenant->payments()
+            ->where('status', 'pending')
+            ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+            ->latest('id')
+            ->first();
+    }
+
+    /**
+     * Abandon an unsettled payment at the customer's request.
+     *
+     * The record is NEVER deleted: status becomes "cancelled", cancelled_at records when,
+     * the invoice is closed and the audit log keeps the trail. A settled payment is
+     * refused outright, and the provider is never told the payment succeeded — this only
+     * says the customer walked away from a QR they did not scan.
+     */
+    public function cancelUnsettled(Payment $payment, ?object $actor = null): bool
+    {
+        return DB::transaction(function () use ($payment, $actor) {
+            // Re-read under a row lock: the webhook may have settled this payment in the
+            // seconds between the click and here.
+            $locked = Payment::whereKey($payment->id)->lockForUpdate()->first();
+
+            if (! $locked || ! in_array($locked->status, self::UNSETTLED_STATUSES, true)) {
+                return false;
+            }
+
+            $locked->update([
+                'status' => 'cancelled',
+                'cancelled_at' => now(),
+                'payload' => array_merge($locked->payload ?? [], [
+                    'cancelled' => ['at' => now()->toIso8601String(), 'by_user_id' => $actor?->id],
+                ]),
+            ]);
+
+            $locked->invoice?->update(['status' => 'cancelled']);
+
+            AuditLogger::log('payment.cancelled', $locked, [
+                'amount' => $locked->amount,
+                'was_status' => $payment->status,
+                'actor_user_id' => $actor?->id,
+            ]);
+
+            return true;
+        });
+    }
 
     /** Create invoice + pending QRIS payment for a plan checkout. */
     public function createCheckout(Tenant $tenant, Plan $plan, string $cycle, $user): Payment
@@ -40,6 +111,14 @@ class PaymentService
         // attempt left an open invoice and a pending payment with no QR, and the
         // pending-payment notice then pointed at a payment nobody could pay.
         return DB::transaction(function () use ($tenant, $plan, $cycle, $user, $amount) {
+            // Serialise concurrent checkouts for this workspace. Two rapid Subscribe
+            // clicks are two separate HTTP requests, so the client-side button state
+            // cannot be trusted; locking the tenant row makes the "is there already an
+            // active payment?" check and the insert below one indivisible unit. The
+            // second request then sees the first one's payment and is sent to the
+            // confirmation modal instead of creating a duplicate.
+            Tenant::whereKey($tenant->id)->lockForUpdate()->first();
+
             $invoice = Invoice::create([
                 'tenant_id' => $tenant->id,
                 'invoice_number' => $this->nextInvoiceNumber(),

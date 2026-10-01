@@ -16,7 +16,23 @@
         <div class="grid gap-4 rounded-lg bg-white p-6 shadow sm:grid-cols-3">
             <div><div class="text-sm text-gray-500">{{ __('Products tracked') }}</div><div class="text-2xl font-semibold">{{ $products->total() }}</div></div>
             <div><div class="text-sm text-gray-500">{{ __('Low stock') }}</div><div class="text-2xl font-semibold text-amber-600">{{ $lowStockCount }}</div></div>
-            <div><div class="text-sm text-gray-500">{{ __('Warehouse') }}</div><div class="text-lg font-semibold">{{ $warehouse?->name ?? __('Not configured') }}</div></div>
+            {{-- Warehouse.
+                 Without a warehouse the stock pages have nothing to show, so the empty
+                 state links straight into the EXISTING warehouses.create flow rather
+                 than leaving the customer stuck. Once a warehouse exists this is just a
+                 label and the name — the empty-state button is gone. --}}
+            <div>
+                <div class="text-sm text-gray-500">{{ __('Warehouse') }}</div>
+                @if ($warehouse)
+                    <div class="text-lg font-semibold">{{ $warehouse->name }}</div>
+                @else
+                    <div class="text-lg font-semibold text-gray-400">{{ __('Not configured') }}</div>
+                    <a href="{{ route('warehouses.create') }}"
+                       class="mt-2 inline-flex items-center px-3 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">
+                        {{ __('+ Add Warehouse') }}
+                    </a>
+                @endif
+            </div>
         </div>
 
         <div class="overflow-hidden rounded-lg bg-white shadow">

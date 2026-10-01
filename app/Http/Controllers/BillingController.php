@@ -139,6 +139,20 @@ class BillingController extends Controller
             return redirect()->route('billing.index')->with('success', "Switched to {$plan->name}.");
         }
 
+        // An unsettled payment must not become a second one. Ask the customer what to do
+        // with the one they already have instead of failing the request — this used to
+        // surface as a 429 because the page view and the checkout shared one tiny bucket.
+        if ($active = $this->payments->activePending($tenant)) {
+            return redirect()->route('billing.index')->with([
+                'pending_checkout' => [
+                    'payment_id' => $active->id,
+                    'plan' => $plan->slug,
+                    'cycle' => $data['cycle'],
+                    'amount' => $active->amount,
+                ],
+            ]);
+        }
+
         // Paid subscriptions always use the existing invoice + QRIS.PW payment flow.
         // A browser must not be able to activate a paid plan by appending ?trial=1.
         // Otherwise create invoice + QRIS payment.
@@ -168,6 +182,93 @@ class BillingController extends Controller
         }
 
         return redirect()->route('billing.pay', $payment);
+    }
+
+    /**
+     * Resolve the "you already have a pending payment" choice.
+     *
+     * Every branch re-reads the payment on the server and re-checks status, ownership and
+     * expiration. The browser only says which button was pressed; it never gets to assert
+     * that a payment is still payable, still cancellable, or even that it exists.
+     *
+     * @param  string  $intent  'continue' = keep paying the existing QR, 'replace' = cancel it and start over
+     */
+    public function resolveCheckout(Request $request)
+    {
+        $ctx = app('tenant.context');
+        $ctx->check();
+        $ctx->authorize('manage_billing');
+
+        $data = $request->validate([
+            'payment_id' => ['required', 'integer', 'min:1'],
+            'plan' => ['required', 'string', 'exists:plans,slug'],
+            'cycle' => ['required', 'in:monthly,yearly'],
+            'intent' => ['required', 'in:continue,replace'],
+        ]);
+
+        $tenant = $ctx->tenant();
+
+        // Tenant-scoped lookup: another workspace's payment is simply not found here.
+        $payment = $tenant->payments()->find($data['payment_id']);
+
+        if (! $payment) {
+            return redirect()->route('billing.index')
+                ->with('status', ['type' => 'error', 'message' => 'That payment no longer exists.']);
+        }
+
+        $plan = Plan::where('slug', $data['plan'])->where('is_active', true)->firstOrFail();
+
+        // "Lanjut Bayar" — only ever to a payment that is genuinely still payable. If it
+        // expired in the meantime it is settled here and the customer is told plainly,
+        // rather than being sent to a dead QR.
+        if ($data['intent'] === 'continue') {
+            if ($payment->isActivePending()) {
+                return redirect()->route('billing.pay', $payment);
+            }
+
+            $this->payments->activePending($tenant); // settles a stale row if that is what it is
+
+            return redirect()->route('billing.index')->with(
+                'status',
+                ['type' => 'error', 'message' => 'Pembayaran sebelumnya sudah kedaluwarsa. Silakan membuat pembayaran baru untuk melanjutkan berlangganan.']
+            );
+        }
+
+        // "Batalkan & Buat Baru" — the old payment is marked cancelled, never deleted.
+        if (! $payment->isCancellable()) {
+            return redirect()->route('billing.index')->with('status', [
+                'type' => 'error',
+                'message' => $payment->isSettled()
+                    ? 'Pembayaran sudah berhasil dan tidak dapat dibatalkan.'
+                    : 'Pesanan sebelumnya sudah diproses. Silakan cek status pembayaran.',
+            ]);
+        }
+
+        if (! $this->payments->cancelUnsettled($payment, $request->user())) {
+            return redirect()->route('billing.index')->with('status', [
+                'type' => 'error',
+                'message' => 'Pesanan sebelumnya sudah diproses. Silakan cek status pembayaran.',
+            ]);
+        }
+
+        try {
+            $new = $this->payments->createCheckout($tenant, $plan, $data['cycle'], $request->user());
+        } catch (PaymentProviderException $e) {
+            \Illuminate\Support\Facades\Log::error('billing.checkout.provider_failed', [
+                'tenant_id' => $tenant->id,
+                'plan' => $plan->slug,
+                'cycle' => $data['cycle'],
+                'user_id' => $request->user()->id,
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+                'provider_status' => $e->providerStatus,
+            ]);
+
+            return redirect()->route('billing.index')
+                ->with('error', 'We could not reach the payment provider. Please try again in a moment.');
+        }
+
+        return redirect()->route('billing.pay', $new);
     }
 
     public function showPayment(Request $request, $paymentId)
