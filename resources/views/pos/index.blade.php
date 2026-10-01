@@ -16,6 +16,9 @@
         </div>
     </x-slot>
 
+    {{-- x-data scopes the SHARED customer modal partial (sales.partials.customer-modal),
+         which is Alpine-driven exactly as it is on /sales/create. The cart below stays
+         plain JavaScript, so the POS keeps its no-framework feel. --}}
     <div class="mx-auto max-w-7xl space-y-4 py-6 sm:px-6 lg:px-8">
         {{-- Inline notices (stock errors, network failures) --}}
         <div id="pos-alert" class="hidden rounded-lg border p-3 text-sm"></div>
@@ -39,12 +42,25 @@
                         </div>
                         <div>
                             <label for="pos-customer" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">{{ __('Customer') }}</label>
-                            <select id="pos-customer" class="w-full rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                <option value="">{{ __('Walk-in customer') }}</option>
-                                @foreach ($customers as $customer)
-                                    <option value="{{ $customer->id }}">{{ $customer->name }}</option>
-                                @endforeach
-                            </select>
+                            {{-- Same select + "+ Add Customer" affordance as /sales/create,
+                                 driven by the same shared modal and the same endpoint. --}}
+                            <div class="flex gap-2">
+                                <select id="pos-customer" class="min-w-0 flex-1 rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                    <option value="">{{ __('Walk-in customer') }}</option>
+                                    @foreach ($customers as $customer)
+                                        <option value="{{ $customer->id }}">{{ $customer->name }}</option>
+                                    @endforeach
+                                    @if ($canCreateCustomer)
+                                        <option value="__add_customer__">{{ __('+ Add Customer') }}</option>
+                                    @endif
+                                </select>
+                                @if ($canCreateCustomer)
+                                    <button type="button" id="pos-add-customer"
+                                            class="shrink-0 rounded-lg border border-indigo-600 px-3 py-2 text-xs font-medium text-indigo-700 hover:bg-indigo-50">
+                                        {{ __('+ Add Customer') }}
+                                    </button>
+                                @endif
+                            </div>
                         </div>
                     </div>
 
@@ -217,6 +233,100 @@
         </div>
     </div>
 
+    {{-- The SAME partial /sales/create uses, rendered unchanged: same fields, same
+         validation errors, same POST to customers.store.
+
+         The wrapper is what carries the Alpine scope the partial needs. It travels with
+         the partial rather than hanging off the page container, so the dialog works
+         wherever this include is dropped, and the cart engine reaches it through the
+         [x-data^="posCustomerModal"] selector. --}}
+    <div x-data="posCustomerModal({
+            storeUrl: @json($customerStoreUrl),
+            canCreate: @json($canCreateCustomer),
+        })">
+        @include('sales.partials.customer-modal')
+    </div>
+
+    {{-- Inline and parsed before the deferred app bundle, exactly like sales/create,
+         so window.posCustomerModal exists when Alpine boots. Registering through
+         `alpine:init` instead would be too late: the bundle has already called
+         Alpine.start() by then. --}}
+    <script>
+        window.posCustomerModal = function (config) {
+            return {
+                customerModalOpen: false,
+                customerSaving: false,
+                customerError: '',
+                customerForm: { name: '', phone: '', email: '', address: '' },
+                customerStoreUrl: config.storeUrl,
+                canCreateCustomer: !!config.canCreate,
+
+                openCustomerModal() {
+                    if (!this.canCreateCustomer) return;
+
+                    this.customerError = '';
+                    this.customerModalOpen = true;
+                },
+
+                closeCustomerModal() {
+                    if (this.customerSaving) return;
+
+                    this.customerModalOpen = false;
+                },
+
+                /**
+                 * Hand the new customer to the POS select.
+                 *
+                 * Dispatched as an event rather than by touching the DOM from here, so
+                 * this Alpine scope stays unaware of the cart engine's element ids.
+                 */
+                applyCustomer(customer) {
+                    window.dispatchEvent(new CustomEvent('pos-customer-created', {
+                        detail: { id: String(customer.id), name: customer.name },
+                    }));
+                },
+
+                async createCustomer() {
+                    if (this.customerSaving || !this.canCreateCustomer) return;
+
+                    this.customerSaving = true;
+                    this.customerError = '';
+
+                    try {
+                        const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
+                        const response = await window.fetch(this.customerStoreUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': token,
+                            },
+                            // form_context applies the same server-side rules the sales
+                            // form uses, phone requirement included.
+                            body: JSON.stringify({ ...this.customerForm, form_context: 'pos' }),
+                        });
+                        const payload = await response.json().catch(() => ({}));
+
+                        if (!response.ok) {
+                            // Same error surface as /sales/create: the first server
+                            // validation message, never a client-side re-invention.
+                            const messages = Object.values(payload.errors || {}).flat();
+                            this.customerError = messages[0] || 'Unable to create customer.';
+                            return;
+                        }
+
+                        this.applyCustomer(payload.customer);
+                        this.customerForm = { name: '', phone: '', email: '', address: '' };
+                        this.customerModalOpen = false;
+                    } catch (error) {
+                        this.customerError = 'Unable to create customer. Please try again.';
+                    } finally {
+                        this.customerSaving = false;
+                    }
+                },
+            };
+        };
+    </script>
 
     <script>
     document.addEventListener('DOMContentLoaded', () => {
@@ -234,6 +344,9 @@
             products: [],
             cart: [],
             total: 0,
+            // Which line's price cell is currently an input. null = all rows show a
+            // formatted, clickable price.
+            editingPriceId: null,
             reference: null,
         };
 
@@ -261,6 +374,7 @@
             change: el('pos-change'),
             checkout: el('pos-checkout'),
             alert: el('pos-alert'),
+            addCustomer: el('pos-add-customer'),
             modal: el('pos-modal'),
             modalInvoice: el('pos-modal-invoice'),
             modalTotal: el('pos-modal-total'),
@@ -281,6 +395,65 @@
         }
 
         const clearFlash = () => dom.alert.classList.add('hidden');
+
+        // ---------------------------------------------------------------- customer
+        // The select and the button are plain DOM; the modal is the shared Alpine
+        // partial. The two are joined by DOM events in both directions so neither has
+        // to know about the other, and so creating a customer never reloads the page
+        // (the cart in state.cart is never touched here).
+        const ADD_CUSTOMER = '__add_customer__';
+        let lastCustomerValue = dom.customer.value;
+
+        // Open the shared modal. The Alpine scope owns the dialog; this only nudges it.
+        function openCustomerModal() {
+            const root = document.querySelector('[x-data^="posCustomerModal"]');
+            const scope = root && root._x_dataStack ? root._x_dataStack[0] : null;
+
+            if (!scope || typeof scope.openCustomerModal !== 'function') return;
+
+            scope.openCustomerModal();
+        }
+
+        dom.customer.addEventListener('change', () => {
+            // Choosing "+ Add Customer" from the list opens the modal and snaps the
+            // select back to the previous choice, so the order never carries a
+            // placeholder value into checkout. Same behaviour as /sales/create.
+            if (dom.customer.value === ADD_CUSTOMER) {
+                dom.customer.value = lastCustomerValue;
+                openCustomerModal();
+
+                return;
+            }
+
+            lastCustomerValue = dom.customer.value;
+        });
+
+        if (dom.addCustomer) {
+            dom.addCustomer.addEventListener('click', openCustomerModal);
+        }
+
+        // Fired by the Alpine component once the customer exists. Insert it above the
+        // "+ Add Customer" sentinel and select it — the cart stays exactly as it was.
+        window.addEventListener('pos-customer-created', (event) => {
+            const { id, name } = event.detail || {};
+            if (!id) return;
+
+            const existing = Array.from(dom.customer.options).some((option) => option.value === String(id));
+
+            if (!existing) {
+                const option = document.createElement('option');
+                option.value = String(id);
+                option.textContent = name || `#${id}`;
+
+                const sentinel = Array.from(dom.customer.options)
+                    .find((candidate) => candidate.value === ADD_CUSTOMER);
+
+                dom.customer.insertBefore(option, sentinel || null);
+            }
+
+            dom.customer.value = String(id);
+            lastCustomerValue = String(id);
+        });
 
         async function loadProducts(query = '') {
             dom.loading.classList.remove('hidden');
@@ -412,26 +585,128 @@
             state.cart.forEach((item) => {
                 const row = document.createElement('div');
                 row.className = 'flex items-center justify-between gap-2 py-2.5';
+                // Price cell: a click target that turns into a numeric input, so a
+                // cashier can override the unit price the way the sales form allows,
+                // without leaving the POS or reloading the page.
+                const priceCell = state.editingPriceId === item.id
+                    ? `<input type="number" min="0" step="1" inputmode="numeric"
+                              data-price-input="${item.id}"
+                              value="${Math.round(item.unit_price)}"
+                              aria-label="{{ __('Unit price') }}"
+                              class="w-24 rounded border border-indigo-400 px-1.5 py-1 text-right font-mono text-xs focus:border-indigo-600 focus:ring-indigo-500">`
+                    : `<button type="button" data-price-edit="${item.id}"
+                               aria-label="{{ __('Edit price') }}"
+                               title="{{ __('Click to change the price') }}"
+                               class="w-24 rounded border border-transparent px-1.5 py-1 text-left font-mono text-[11px] text-gray-400 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700">${rupiah(item.unit_price)}</button>`;
+
                 row.innerHTML = `
                     <div class="min-w-0 flex-1">
                         <div class="truncate text-xs font-semibold text-gray-900">${item.name}</div>
-                        <div class="font-mono text-[11px] text-gray-400">${rupiah(item.unit_price)}</div>
+                        <div>${priceCell}</div>
                     </div>
                     <div class="flex items-center gap-1.5">
                         <button type="button" data-step="-1" class="flex h-6 w-6 items-center justify-center rounded bg-gray-100 text-xs font-bold text-gray-700 hover:bg-gray-200">-</button>
                         <span class="w-6 text-center font-mono text-xs font-semibold">${item.quantity}</span>
                         <button type="button" data-step="1" class="flex h-6 w-6 items-center justify-center rounded bg-gray-100 text-xs font-bold text-gray-700 hover:bg-gray-200">+</button>
                     </div>
-                    <span class="w-24 text-right font-mono text-xs font-bold text-gray-900">${rupiah(item.unit_price * item.quantity)}</span>`;
+                    <span class="w-24 text-right font-mono text-xs font-bold text-gray-900" data-line-total="${item.id}">${rupiah(item.unit_price * item.quantity)}</span>`;
 
                 row.querySelectorAll('button[data-step]').forEach((button) => {
                     button.addEventListener('click', () => setQuantity(item.id, Number(button.dataset.step)));
                 });
 
+                const editButton = row.querySelector('[data-price-edit]');
+                if (editButton) {
+                    editButton.addEventListener('click', () => {
+                        state.editingPriceId = item.id;
+                        renderCart();
+
+                        const input = dom.cartItems.querySelector(`[data-price-input="${item.id}"]`);
+                        if (input) {
+                            input.focus();
+                            input.select();
+                        }
+                    });
+                }
+
+                const priceInput = row.querySelector('[data-price-input]');
+                if (priceInput) {
+                    // Enter commits and blur commits — a cashier should never be stuck in
+                    // an edit state. Escape abandons the change.
+                    priceInput.addEventListener('keydown', (event) => {
+                        if (event.key === 'Enter') {
+                            event.preventDefault();
+                            commitUnitPrice(item.id, priceInput.value);
+                        } else if (event.key === 'Escape') {
+                            event.preventDefault();
+                            state.editingPriceId = null;
+                            renderCart();
+                        }
+                    });
+                    priceInput.addEventListener('blur', () => commitUnitPrice(item.id, priceInput.value));
+                }
+
                 dom.cartItems.appendChild(row);
             });
         }
 
+
+        /**
+         * Apply a cashier's price override to one line.
+         *
+         * Only a plain non-negative number is accepted. Anything else — empty, a
+         * formatted string such as "Rp15.000", letters, a negative, an absurd value —
+         * is rejected and the previous price is kept, so a mistyped entry can never
+         * silently become a 0 or a NaN and quietly change what the customer is charged.
+         *
+         * The stored value stays a whole-rupiah NUMBER, like every other cart price.
+         * Conversion to the integer cents the ledger uses happens server-side in
+         * RecordSaleService; the formatted "Rp 15.000" string is display only and is
+         * never what leaves the browser.
+         */
+        function commitUnitPrice(productId, rawValue) {
+            state.editingPriceId = null;
+
+            const item = state.cart.find((line) => line.id === productId);
+            if (!item) {
+                renderCart();
+
+                return;
+            }
+
+            const trimmed = String(rawValue ?? '').trim();
+
+            // A formatted amount is not a price. Rejecting it is deliberate: silently
+            // stripping "Rp" and dots would guess at the cashier's intent.
+            const isPlainNumber = /^\d+(\.\d{1,2})?$/.test(trimmed);
+            const parsed = Number(trimmed);
+
+            if (!isPlainNumber || !Number.isFinite(parsed) || parsed < 0) {
+                if (trimmed !== '') {
+                    flash(@json(__('Enter a price of 0 or more, as a plain number (for example 15000).')));
+                }
+
+                renderCart();
+                refreshTotals();
+
+                return;
+            }
+
+            // Whole rupiah only: rounding here keeps the cart free of float drift, and
+            // what the backend receives is a number, never a formatted string.
+            const next = Math.round(parsed);
+
+            if (next === item.unit_price) {
+                renderCart();
+
+                return;
+            }
+
+            item.unit_price = next;
+
+            renderCart();
+            refreshTotals();
+        }
 
         // Preview only. The authoritative total is computed again at checkout.
         let previewTimer = null;

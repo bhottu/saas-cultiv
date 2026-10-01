@@ -383,6 +383,11 @@ class PwaTest extends TestCase
             'defaultWarehouse' => $this->warehouse,
             'customers'        => collect(),
             'paymentMethods'   => config('business.sales.payment_methods', ['cash' => 'Cash']),
+            // The same two keys PosController::index passes, for the shared customer
+            // modal on the POS screen. Kept in step with the controller so this view
+            // renders exactly the data the real screen gets.
+            'canCreateCustomer' => false,
+            'customerStoreUrl'   => route('customers.store'),
         ])->render();
 
         // Two controls only, both from the shared header: the desktop icon button and

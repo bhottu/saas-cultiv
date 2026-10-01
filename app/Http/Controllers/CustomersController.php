@@ -69,9 +69,12 @@ class CustomersController extends Controller
         $tenant = $request->user()->currentTenant;
 
         $validated = $request->validate([
-            'form_context' => 'nullable|in:sales_create',
+            // `pos` is the cashier screen reusing this same endpoint, so a customer
+            // created at the counter is validated by exactly the same rules — including
+            // the phone requirement — as one created from /sales/create.
+            'form_context' => 'nullable|in:sales_create,pos',
             'name' => 'required|string|max:255',
-            'phone' => 'required_if:form_context,sales_create|nullable|string|max:50',
+            'phone' => 'required_if:form_context,sales_create,pos|nullable|string|max:50',
             'email' => 'nullable|email|max:255',
             'address' => 'nullable|string|max:255',
             'notes' => 'nullable|string|max:65535',

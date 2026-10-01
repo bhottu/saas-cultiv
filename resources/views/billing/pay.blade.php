@@ -8,10 +8,21 @@
             <h3 class="text-lg font-bold mb-1">Scan QRIS to pay</h3>
             <p class="text-sm text-gray-500 mb-4">Amount: <strong>{{ \App\Services\Money::formatRupiah($payment->amount) }}</strong></p>
 
-            {{-- QR code served from provider URL; no API credentials ever reach the browser. --}}
-            @php $qr = $payment->payload['create']['qris_url'] ?? null; @endphp
-            @if ($qr)
-                <img src="{{ $qr }}" alt="QRIS payment code" class="mx-auto w-56 h-56 border rounded">
+            {{-- The QR is QRIS.PW's own resource, passed through byte-for-byte:
+                 Payment::qrImageUrl() reads the stored create-payment response and
+                 returns it verbatim, so the scanned code is the provider's code.
+                 Cultiv never assembles, re-encodes or rebuilds a QRIS payload. --}}
+            @php $qrImage = $payment->qrImageUrl(); @endphp
+            @if ($qrImage)
+                <img src="{{ $qrImage }}" alt="QRIS payment code" class="mx-auto w-56 h-56 border rounded">
+            @elseif ($qrString = $payment->qrisPayloadString())
+                {{-- The provider sent a QRIS payload but no image URL. The payload is
+                     shown verbatim so the payment is still completable and so the
+                     response contract can be confirmed; no QR is invented here. --}}
+                <div class="mx-auto w-56 h-56 border rounded p-2 overflow-auto text-left">
+                    <p class="text-xs text-gray-500">QRIS code from the payment provider:</p>
+                    <p class="text-xs font-mono break-all">{{ $qrString }}</p>
+                </div>
             @else
                 <p class="text-gray-500">QR code unavailable — try creating a new payment.</p>
             @endif

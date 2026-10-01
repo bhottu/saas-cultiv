@@ -208,7 +208,56 @@ class PaymentService
             'payload' => ['create' => $resp],
         ]);
 
+        $this->logQrSource($payment);
+
         AuditLogger::log('payment.created', $payment, ['amount' => $payment->amount]);
+    }
+
+    /**
+     * Record WHICH QR artefact the provider actually returned.
+     *
+     * When a bank reports "Merchant not found", the decisive question is whether
+     * Cultiv handed the customer a genuine provider QR or something of its own making.
+     * This line answers it from the stored response alone: which field held the code,
+     * whether it is an image URL, and — for a QRIS payload string — whether it starts
+     * with the EMVCo identifier "0002".
+     *
+     * Only a short prefix and a length are recorded. The QR payload is not a secret,
+     * but it is a live payment instruction, so it is not copied into the log in full.
+     */
+    private function logQrSource(Payment $payment): void
+    {
+        $url = $payment->qrImageUrl();
+        $string = $payment->qrisPayloadString();
+
+        if ($url === null && $string === null) {
+            \Illuminate\Support\Facades\Log::warning('qrispw.qr_missing', [
+                'tenant_id' => $payment->tenant_id,
+                'payment_id' => $payment->id,
+                'order_id' => $payment->order_id,
+                'transaction_id' => $payment->provider_transaction_id,
+                // Key names only — this is what tells us whether the response shape
+                // changed on the provider's side.
+                'response_keys' => array_keys($payment->payload['create'] ?? []),
+            ]);
+
+            return;
+        }
+
+        \Illuminate\Support\Facades\Log::info('qrispw.qr_source', [
+            'tenant_id' => $payment->tenant_id,
+            'payment_id' => $payment->id,
+            'order_id' => $payment->order_id,
+            'transaction_id' => $payment->provider_transaction_id,
+            'has_image_url' => $url !== null,
+            'image_host' => $url ? parse_url($url, PHP_URL_HOST) : null,
+            'has_qris_string' => $string !== null,
+            'qris_string_length' => $string ? strlen($string) : null,
+            // A real EMVCo QRIS payload always opens with "0002". Anything else means
+            // the provider did not hand back a standard code, which points at the
+            // provider rather than at Cultiv.
+            'qris_string_is_emvco' => $string ? str_starts_with($string, '0002') : null,
+        ]);
     }
 
     /**

@@ -60,6 +60,11 @@ class PosController extends Controller
             'defaultWarehouse' => $warehouses->first(),
             'customers'        => Customer::query()->active()->orderBy('name')->get(),
             'paymentMethods'   => config('business.sales.payment_methods', ['cash' => 'Cash']),
+            // Same permission /sales/create uses for its "+ Add Customer" button, so the
+            // cashier screen offers exactly what the back-office sale screen offers.
+            'canCreateCustomer' => $this->auth->can('customers.create'),
+            // The customer modal is the shared partial and posts to the same endpoint.
+            'customerStoreUrl' => route('customers.store'),
         ]);
     }
 
