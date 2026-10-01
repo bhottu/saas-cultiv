@@ -31,5 +31,10 @@
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
+        <!-- The gateway client refuses to call the provider without credentials, so the
+             test environment must present itself as a configured installation. These are
+             fake values that only ever travel into Http::fake(). -->
+        <env name="QRISPW_API_KEY" value="test-key"/>
+        <env name="QRISPW_API_SECRET" value="test-secret"/>
     </php>
 </phpunit>

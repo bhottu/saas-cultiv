@@ -25,6 +25,14 @@ class PaymentService
     /** States that may still be abandoned by the customer. */
     public const UNSETTLED_STATUSES = ['pending', 'expired'];
 
+    /**
+     * How long an unsettled payment stays payable.
+     *
+     * Ten minutes: long enough to open a banking app and pay, short enough that a
+     * customer who wandered off does not come back to a prompt for a dead QR.
+     */
+    public const PAYMENT_WINDOW_MINUTES = 10;
+
     public function __construct(
         private readonly QrisPwClient $client,
     ) {}
@@ -158,11 +166,41 @@ class PaymentService
             'customer_name' => $payment->user?->name ?? $tenant->name,
             'customer_phone' => $tenant->settings['billing_phone'] ?? '081000000000',
             'callback_url' => route('webhooks.qris'),
+        ], [
+            // Correlation ids for the operator. Ids only — no credential is ever
+            // passed into the gateway client or written to the log.
+            'tenant_id' => $payment->tenant_id,
+            'user_id' => $payment->user_id,
+            'payment_id' => $payment->id,
+            'invoice_id' => $payment->invoice_id,
+            'order_id' => $payment->order_id,
         ]);
+
+        // A pending payment is payable for exactly PAYMENT_WINDOW_MINUTES from the moment
+        // it was created. That window is ours, not the provider's: taking the provider's
+        // expires_at verbatim meant the "continue or start over" prompt could stay open for
+        // a QR the provider had already expired, which is exactly the dead end this flow
+        // exists to prevent. If the provider says something sooner, we honour the sooner
+        // value so we never promise a window the gateway has already closed.
+        $expiresAt = $payment->created_at->copy()->addMinutes(self::PAYMENT_WINDOW_MINUTES);
+
+        if (isset($resp['expires_at'])) {
+            try {
+                $providerExpiry = \Illuminate\Support\Carbon::parse($resp['expires_at']);
+
+                if ($providerExpiry->isBefore($expiresAt)) {
+                    $expiresAt = $providerExpiry;
+                }
+            } catch (\Throwable $e) {
+                // An unparseable provider value must not cost the customer their window;
+                // our own value is already correct.
+                report($e);
+            }
+        }
 
         $payment->update([
             'provider_transaction_id' => $resp['transaction_id'] ?? null,
-            'expires_at' => isset($resp['expires_at']) ? \Illuminate\Support\Carbon::parse($resp['expires_at']) : now()->addMinutes(10),
+            'expires_at' => $expiresAt,
             'payload' => ['create' => $resp],
         ]);
 

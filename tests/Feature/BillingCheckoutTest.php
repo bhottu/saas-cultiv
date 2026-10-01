@@ -63,7 +63,7 @@ class BillingCheckoutTest extends TestCase
         $first = Payment::firstOrFail();
 
         $this->member()->post('/billing/checkout/resolve', [
-            'payment_id' => $first->id, 'plan' => 'starter',
+            'payment_id' => $first->id, 'invoice_id' => $first->invoice_id, 'plan' => 'starter',
             'cycle' => 'monthly', 'intent' => 'replace',
         ]);
 
@@ -232,7 +232,7 @@ class BillingCheckoutTest extends TestCase
         $existing = $this->pendingPayment(now()->addMinutes(10));
 
         $this->member()->post('/billing/checkout/resolve', [
-            'payment_id' => $existing->id, 'plan' => 'pro',
+            'payment_id' => $existing->id, 'invoice_id' => $existing->invoice_id, 'plan' => 'pro',
             'cycle' => 'monthly', 'intent' => 'continue',
         ])->assertRedirect(route('billing.pay', $existing));
 
@@ -249,7 +249,7 @@ class BillingCheckoutTest extends TestCase
         $stale = $this->pendingPayment(now()->subMinute());
 
         $res = $this->member()->post('/billing/checkout/resolve', [
-            'payment_id' => $stale->id, 'plan' => 'pro',
+            'payment_id' => $stale->id, 'invoice_id' => $stale->invoice_id, 'plan' => 'pro',
             'cycle' => 'monthly', 'intent' => 'continue',
         ]);
 
@@ -269,7 +269,7 @@ class BillingCheckoutTest extends TestCase
         $invoiceId = $existing->invoice_id;
 
         $res = $this->member()->post('/billing/checkout/resolve', [
-            'payment_id' => $existing->id, 'plan' => 'pro',
+            'payment_id' => $existing->id, 'invoice_id' => $existing->invoice_id, 'plan' => 'pro',
             'cycle' => 'monthly', 'intent' => 'replace',
         ]);
 
@@ -294,7 +294,7 @@ class BillingCheckoutTest extends TestCase
         $paid = $this->pendingPayment(now()->addMinutes(10), status: 'paid', paidAt: now());
 
         $res = $this->member()->post('/billing/checkout/resolve', [
-            'payment_id' => $paid->id, 'plan' => 'pro',
+            'payment_id' => $paid->id, 'invoice_id' => $paid->invoice_id, 'plan' => 'pro',
             'cycle' => 'monthly', 'intent' => 'replace',
         ]);
 
@@ -311,21 +311,27 @@ class BillingCheckoutTest extends TestCase
     {
         $this->fakeGateway();
         $other = Tenant::create(['name' => 'Other', 'slug' => 'other-t', 'owner_id' => $this->owner->id]);
+        $foreignInvoice = Invoice::create([
+            'tenant_id' => $other->id, 'invoice_number' => 'INV-F-'.Str::random(8),
+            'amount' => 5_000_000, 'currency' => 'IDR', 'status' => 'open',
+            'description' => 'foreign', 'issued_at' => now(), 'due_at' => now()->addHour(),
+        ]);
         $foreign = Payment::withoutGlobalScopes()->create([
             'tenant_id' => $other->id, 'user_id' => $this->owner->id,
+            'invoice_id' => $foreignInvoice->id,
             'order_id' => 'ORD-FOREIGN', 'amount' => 5_000_000, 'currency' => 'IDR',
             'status' => 'pending', 'expires_at' => now()->addMinutes(10),
         ]);
 
         // "Continue" cannot reach it...
         $this->member()->post('/billing/checkout/resolve', [
-            'payment_id' => $foreign->id, 'plan' => 'pro',
+            'payment_id' => $foreign->id, 'invoice_id' => $foreign->invoice_id, 'plan' => 'pro',
             'cycle' => 'monthly', 'intent' => 'continue',
         ])->assertRedirect(route('billing.index'));
 
         // ...nor cancel it.
         $this->member()->post('/billing/checkout/resolve', [
-            'payment_id' => $foreign->id, 'plan' => 'pro',
+            'payment_id' => $foreign->id, 'invoice_id' => $foreign->invoice_id, 'plan' => 'pro',
             'cycle' => 'monthly', 'intent' => 'replace',
         ])->assertRedirect(route('billing.index'));
 

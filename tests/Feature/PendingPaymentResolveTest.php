@@ -66,6 +66,8 @@ class PendingPaymentResolveTest extends TestCase
 
         $res = $this->member()->post('/billing/checkout/resolve', [
             'payment_id' => $existing->id,
+            'invoice_id' => $existing->invoice_id,
+            'invoice_id' => $existing->invoice_id,
             'plan' => 'starter',
             'cycle' => 'monthly',
             'intent' => 'continue',
@@ -99,6 +101,8 @@ class PendingPaymentResolveTest extends TestCase
 
         $res = $this->member()->post('/billing/checkout/resolve', [
             'payment_id' => $existing->id,
+            'invoice_id' => $existing->invoice_id,
+            'invoice_id' => $existing->invoice_id,
             'plan' => 'starter',
             'cycle' => 'monthly',
             'intent' => 'replace',
@@ -160,6 +164,7 @@ class PendingPaymentResolveTest extends TestCase
 
         $res = $this->member()->post('/billing/checkout/resolve', [
             'payment_id' => $paid->id,
+            'invoice_id' => $paid->invoice_id,
             'plan' => 'starter',
             'cycle' => 'monthly',
             'intent' => 'replace',
@@ -193,6 +198,8 @@ class PendingPaymentResolveTest extends TestCase
         foreach (range(1, 4) as $ignored) {
             $this->member()->post('/billing/checkout/resolve', [
                 'payment_id' => $existing->id,
+                'invoice_id' => $existing->invoice_id,
+                'invoice_id' => $existing->invoice_id,
                 'plan' => 'starter',
                 'cycle' => 'monthly',
                 'intent' => 'replace',
@@ -208,18 +215,207 @@ class PendingPaymentResolveTest extends TestCase
         $this->assertNotNull($old->cancelled_at);
     }
 
+    /**
+     * Scenario A — a live payment exists (created < 10 minutes ago), so the prompt shows.
+     *
+     * This is the exact reported path: subscribe Starter, land on the barcode, press the
+     * browser Back button, then subscribe a different plan.
+     */
+    public function test_scenario_a_a_live_pending_payment_prompts_before_a_second_plan(): void
+    {
+        $this->fakeGateway();
+
+        $this->member()->post('/billing/checkout', ['plan' => 'starter', 'cycle' => 'monthly']);
+        $starter = Payment::firstOrFail();
+
+        // The customer browses away and comes back to /billing.
+        $this->assertStringContainsString('Pending payment', $this->billingHtml());
+
+        // Now they subscribe a different plan.
+        $res = $this->member()->post('/billing/checkout', ['plan' => 'pro', 'cycle' => 'monthly']);
+
+        $res->assertRedirect(route('billing.index'));
+        $res->assertSessionHas('pending_checkout');
+
+        // Read the payload now: a flash lives for exactly one request, and the GET
+        // below (which renders the prompt) consumes it.
+        $payload = session('pending_checkout');
+        $this->assertSame($starter->id, $payload['payment_id']);
+        $this->assertSame($starter->invoice_id, $payload['invoice_id']);
+        $this->assertSame('pro', $payload['plan']);
+
+        // The prompt describes the payment already on file, and offers both choices.
+        $html = $this->member()->get('/billing')->assertOk()->getContent();
+        $this->assertStringContainsString('Payment pending', $html);
+        $this->assertStringContainsString('Continue payment', $html);
+        // The ampersand is HTML-escaped on render.
+        $this->assertStringContainsString('Cancel &amp; create new', $html);
+
+        // No second payment was created by merely asking.
+        $this->assertSame(1, Payment::count());
+    }
+
+    /** The window is exactly ten minutes from creation, not the provider's choice. */
+    public function test_scenario_a_a_new_payment_is_payable_for_exactly_ten_minutes(): void
+    {
+        $this->fakeGateway();
+
+        $this->member()->post('/billing/checkout', ['plan' => 'starter', 'cycle' => 'monthly']);
+
+        $payment = Payment::firstOrFail();
+
+        $this->assertTrue(
+            $payment->isActivePending(),
+            'A payment created seconds ago must be payable.'
+        );
+        $this->assertEqualsWithDelta(
+            10,
+            $payment->created_at->diffInMinutes($payment->expires_at, false),
+            0.05,
+            'A pending payment must expire exactly PAYMENT_WINDOW_MINUTES after it was created.'
+        );
+    }
+
+    /**
+     * Scenario B — the window has closed.
+     *
+     * No prompt, the stale row is settled to `expired`, and the new plan is simply
+     * allowed through.
+     */
+    public function test_scenario_b_an_expired_payment_neither_prompts_nor_blocks(): void
+    {
+        $this->fakeGateway();
+        $dead = $this->paymentWithQr(now()->subMinute());
+
+        $res = $this->member()->post('/billing/checkout', ['plan' => 'pro', 'cycle' => 'monthly']);
+
+        $fresh = Payment::where('status', 'pending')->firstOrFail();
+
+        $res->assertRedirect(route('billing.pay', $fresh));
+        $this->assertNull(session('pending_checkout'), 'An expired payment must not raise the prompt.');
+        $this->assertSame('expired', $dead->fresh()->status, 'The stale row must be settled, not left pending.');
+        $this->assertSame(2, Payment::count());
+    }
+    /**
+     * Scenario C — "Continue payment" returns to the barcode.
+     *
+     * The reported failure was "The intent field is required." These assertions are
+     * the ones that regression protects: the redirect must land on the existing
+     * payment's checkout page, with its QR, and create nothing.
+     */
+    public function test_scenario_c_continue_payment_returns_to_the_barcode(): void
+    {
+        $this->fakeGateway();
+        $existing = $this->paymentWithQr(now()->addMinutes(9));
+
+        $res = $this->member()->post('/billing/checkout/resolve', [
+            'intent' => 'continue',
+            'payment_id' => $existing->id,
+            'invoice_id' => $existing->invoice_id,
+            'plan' => 'pro',
+            'cycle' => 'monthly',
+        ]);
+
+        // Straight to the checkout for the payment that already exists.
+        $res->assertRedirect(route('billing.pay', $existing));
+        $res->assertSessionHasNoErrors();
+
+        // The QR is on that page.
+        $this->member()->get(route('billing.pay', $existing))
+            ->assertOk()
+            ->assertSee('QRIS payment code', escape: false);
+
+        // And nothing was created, cancelled or altered.
+        $this->assertSame(1, Payment::count());
+        $this->assertSame('pending', $existing->fresh()->status);
+        $this->assertNull($existing->fresh()->cancelled_at);
+    }
+
+    /** A payload without `intent` is still rejected — but never silently half-applied. */
+    public function test_scenario_c_a_missing_intent_is_rejected_without_side_effects(): void
+    {
+        $this->fakeGateway();
+        $existing = $this->paymentWithQr(now()->addMinutes(9));
+
+        $this->member()->post('/billing/checkout/resolve', [
+            'payment_id' => $existing->id,
+            'invoice_id' => $existing->invoice_id,
+            'plan' => 'pro',
+            'cycle' => 'monthly',
+        ])->assertSessionHasErrors('intent');
+
+        $this->assertSame('pending', $existing->fresh()->status);
+        $this->assertSame(1, Payment::count());
+    }
+
+    /** The invoice in the payload must belong to the payment, or nothing is touched. */
+    public function test_a_mismatched_invoice_is_refused(): void
+    {
+        $this->fakeGateway();
+        $existing = $this->paymentWithQr(now()->addMinutes(9));
+        $otherInvoice = Invoice::create([
+            'tenant_id' => $this->tenant->id, 'invoice_number' => 'INV-X-'.Str::random(8),
+            'amount' => 79_000, 'currency' => 'IDR', 'status' => 'open',
+            'description' => 'other', 'issued_at' => now(), 'due_at' => now()->addHour(),
+        ]);
+
+        $res = $this->member()->post('/billing/checkout/resolve', [
+            'intent' => 'replace',
+            'payment_id' => $existing->id,
+            'invoice_id' => $otherInvoice->id,
+            'plan' => 'pro',
+            'cycle' => 'monthly',
+        ]);
+
+        $res->assertRedirect(route('billing.index'));
+        $this->assertSame('pending', $existing->fresh()->status, 'A mismatched payload must not cancel anything.');
+        $this->assertSame(1, Payment::count());
+    }
+
     /** Both buttons must submit the intent that the backend switches on. */
     public function test_the_modal_buttons_post_the_two_intents_the_backend_expects(): void
     {
-        $this->member()
-            ->withSession(['pending_checkout' => [
-                'payment_id' => 1, 'plan' => 'starter', 'cycle' => 'monthly', 'amount' => 79_000,
-            ]])
-            ->get('/billing')
-            ->assertOk()
-            ->assertSee('name="intent" value="continue"', escape: false)
-            ->assertSee('name="intent" value="replace"', escape: false)
-            ->assertSee(route('billing.checkout.resolve'), escape: false);
+        $html = $this->modalHtml();
+
+        $this->assertStringContainsString('name="intent" value="continue"', $html);
+        $this->assertStringContainsString('name="intent" value="replace"', $html);
+        $this->assertStringContainsString(route('billing.checkout.resolve'), $html);
+    }
+
+    /**
+     * `intent` must never travel on a submit button again.
+     *
+     * A submitter that is disabled while the browser builds the form's entry list is
+     * dropped from the POST, which is how production ended up answering "The intent
+     * field is required." A hidden input inside its own form cannot be dropped by a
+     * button state, by Alpine, or by a stale bundle.
+     */
+    public function test_intent_is_never_carried_by_a_submit_button(): void
+    {
+        $html = $this->modalHtml();
+
+        $this->assertDoesNotMatchRegularExpression(
+            '/<button[^>]*\bname="intent"/',
+            $html,
+            'intent must not ride on the submitter; it belongs in a hidden input.'
+        );
+
+        // And each intent lives in its own form, so neither depends on the other.
+        $this->assertSame(
+            2,
+            substr_count($html, 'action="'.route('billing.checkout.resolve').'"'),
+            'The modal must post two independent forms, one per choice.'
+        );
+    }
+
+    /** A complete checkout payload: payment, invoice, plan and cycle all travel. */
+    public function test_the_modal_carries_the_full_checkout_payload(): void
+    {
+        $html = $this->modalHtml();
+
+        foreach (['payment_id', 'invoice_id', 'plan', 'cycle'] as $field) {
+            $this->assertStringContainsString('name="'.$field.'"', $html);
+        }
     }
 
     /** The modal copy must be English, matching the rest of the application. */
@@ -255,7 +451,8 @@ class PendingPaymentResolveTest extends TestCase
     {
         return $this->member()
             ->withSession(['pending_checkout' => [
-                'payment_id' => 1, 'plan' => 'starter', 'cycle' => 'monthly', 'amount' => 79_000,
+                'payment_id' => 1, 'invoice_id' => 1,
+                'plan' => 'starter', 'cycle' => 'monthly', 'amount' => 79_000,
             ]])
             ->get('/billing')
             ->assertOk()
@@ -305,6 +502,8 @@ class PendingPaymentResolveTest extends TestCase
 
         $this->member()->post('/billing/checkout/resolve', [
             'payment_id' => $existing->id,
+            'invoice_id' => $existing->invoice_id,
+            'invoice_id' => $existing->invoice_id,
             'plan' => 'starter',
             'cycle' => 'monthly',
             'intent' => 'nonsense',

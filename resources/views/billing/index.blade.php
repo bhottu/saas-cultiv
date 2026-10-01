@@ -100,40 +100,50 @@
              server-side on submit — this is a convenience prompt, not the enforcement. --}}
         @if ($pendingCheckout = session('pending_checkout'))
             <x-modal name="pending-checkout" :show="true" maxWidth="lg">
-                <form method="POST" action="{{ route('billing.checkout.resolve') }}">
-                    @csrf
-                    <input type="hidden" name="payment_id" value="{{ $pendingCheckout['payment_id'] }}">
-                    <input type="hidden" name="plan" value="{{ $pendingCheckout['plan'] }}">
-                    <input type="hidden" name="cycle" value="{{ $pendingCheckout['cycle'] }}">
+                {{-- Why two forms instead of one form with two submit buttons:
+                     `intent` used to ride on the submitter's name/value. The browser
+                     builds a form's entry list AFTER the submit event, and any handler
+                     that disables the button in that window (this app does, globally)
+                     silently removes it — the request then arrived without `intent` and
+                     was rejected with "The intent field is required." Carrying it in a
+                     hidden input inside its own form makes the two choices independent of
+                     the button's disabled state, of Alpine, and of the JS bundle. --}}
+                {{-- ?? on every key: a session flashed by the previous release survives the deploy, and
+                     an undefined key here would render a 500 on /billing itself. --}}
+                <div class="p-6">
+                    <h3 class="text-lg font-medium text-gray-900">{{ __('Payment pending') }}</h3>
+                    <p class="mt-2 text-sm text-gray-600">
+                        {{ __('You have a payment that has not been completed yet.') }}<br>
+                        {{ __('Would you like to continue that payment, or cancel it and create a new one?') }}
+                    </p>
+                    <p class="mt-3 text-sm text-gray-500">
+                        {{ \App\Services\Money::formatRupiah($pendingCheckout['amount'] ?? 0) }}
+                    </p>
+                </div>
 
-                    <div class="p-6">
-                        <h3 class="text-lg font-medium text-gray-900">{{ __('Payment pending') }}</h3>
-                        <p class="mt-2 text-sm text-gray-600">
-                            {{ __('You have a payment that has not been completed yet.') }}<br>
-                            {{ __('Would you like to continue that payment, or cancel it and create a new one?') }}
-                        </p>
-                        <p class="mt-3 text-sm text-gray-500">
-                            {{ \App\Services\Money::formatRupiah($pendingCheckout['amount']) }}
-                        </p>
-                    </div>
+                <div class="bg-gray-50 px-6 py-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    {{-- `contents` keeps each <form> out of the flex layout so the two
+                         buttons sit exactly where the old single-form row put them. --}}
+                    <form method="POST" action="{{ route('billing.checkout.resolve') }}" class="contents">
+                        @csrf
+                        <input type="hidden" name="intent" value="continue">
+                        <input type="hidden" name="payment_id" value="{{ $pendingCheckout['payment_id'] ?? '' }}">
+                        <input type="hidden" name="invoice_id" value="{{ $pendingCheckout['invoice_id'] ?? '' }}">
+                        <input type="hidden" name="plan" value="{{ $pendingCheckout['plan'] ?? '' }}">
+                        <input type="hidden" name="cycle" value="{{ $pendingCheckout['cycle'] ?? 'monthly' }}">
+                        <x-secondary-button type="submit">{{ __('Continue payment') }}</x-secondary-button>
+                    </form>
 
-                    <div class="bg-gray-50 px-6 py-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                        {{-- Plain submit buttons carrying name="intent".
-                             Two rules keep this working, and both were broken before:
-                              - no JS form.submit(), which bypasses the submitter and would
-                               drop the intent value entirely;
-                             - the shared submit-button handler must not disable the button
-                               synchronously, which would strip name/value from the entry
-                               list. See lockSubmitter() in resources/js/submit-button.js. --}}
-                        <x-secondary-button type="submit" name="intent" value="continue">
-                            {{ __('Continue payment') }}
-                        </x-secondary-button>
-
-                        <x-danger-button type="submit" name="intent" value="replace">
-                            {{ __('Cancel & create new') }}
-                        </x-danger-button>
-                    </div>
-                </form>
+                    <form method="POST" action="{{ route('billing.checkout.resolve') }}" class="contents">
+                        @csrf
+                        <input type="hidden" name="intent" value="replace">
+                        <input type="hidden" name="payment_id" value="{{ $pendingCheckout['payment_id'] ?? '' }}">
+                        <input type="hidden" name="invoice_id" value="{{ $pendingCheckout['invoice_id'] ?? '' }}">
+                        <input type="hidden" name="plan" value="{{ $pendingCheckout['plan'] ?? '' }}">
+                        <input type="hidden" name="cycle" value="{{ $pendingCheckout['cycle'] ?? 'monthly' }}">
+                        <x-danger-button type="submit">{{ __('Cancel & create new') }}</x-danger-button>
+                    </form>
+                </div>
             </x-modal>
         @endif
 

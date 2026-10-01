@@ -146,6 +146,7 @@ class BillingController extends Controller
             return redirect()->route('billing.index')->with([
                 'pending_checkout' => [
                     'payment_id' => $active->id,
+                    'invoice_id' => $active->invoice_id,
                     'plan' => $plan->slug,
                     'cycle' => $data['cycle'],
                     'amount' => $active->amount,
@@ -159,26 +160,27 @@ class BillingController extends Controller
         try {
             $payment = $this->payments->createCheckout($tenant, $plan, $data['cycle'], $request->user());
         } catch (PaymentProviderException $e) {
-            // The payment gateway refused (usually missing/invalid credentials, a network
-            // hiccup, or a rate limit). A gateway problem is not an application crash:
-            // billing the customer with a 500 loses the checkout and leaves them with no
-            // way forward. Log for the operator, then send them back with a clear message
-            // and a still-usable /billing page.
+            // The payment gateway refused or could not be reached. A gateway problem is
+            // not an application crash: billing the customer with a 500 loses the
+            // checkout and leaves them with no way forward. Log for the operator with
+            // full correlation ids, then answer with a message that matches the CAUSE —
+            // a credential fault needs an administrator, a transient fault is worth
+            // retrying, and one sentence for all three sends the wrong party away.
             //
             // Deliberately no credentials, headers or full provider body are logged —
-            // only the exception class/message and non-identifying ids.
+            // only ids, the endpoint, the status and the exception category.
             \Illuminate\Support\Facades\Log::error('billing.checkout.provider_failed', [
                 'tenant_id' => $tenant->id,
                 'plan' => $plan->slug,
                 'cycle' => $data['cycle'],
                 'user_id' => $request->user()->id,
+                'category' => $e->category,
                 'exception' => $e::class,
                 'message' => $e->getMessage(),
                 'provider_status' => $e->providerStatus,
             ]);
 
-            return redirect()->route('billing.index')
-                ->with('error', 'We could not reach the payment provider. Please try again in a moment.');
+            return redirect()->route('billing.index')->with('error', $e->userMessage());
         }
 
         return redirect()->route('billing.pay', $payment);
@@ -201,6 +203,7 @@ class BillingController extends Controller
 
         $data = $request->validate([
             'payment_id' => ['required', 'integer', 'min:1'],
+            'invoice_id' => ['required', 'integer', 'min:1'],
             'plan' => ['required', 'string', 'exists:plans,slug'],
             'cycle' => ['required', 'in:monthly,yearly'],
             'intent' => ['required', 'in:continue,replace'],
@@ -214,6 +217,17 @@ class BillingController extends Controller
         if (! $payment) {
             return redirect()->route('billing.index')
                 ->with('status', ['type' => 'error', 'message' => 'That payment no longer exists.']);
+        }
+
+        // The invoice travels with the form so the checkout payload is complete, but it
+        // is never trusted: a mismatch means the form was tampered with or is stale, and
+        // continuing anyway would show a QR for an order that is not the one on screen.
+        if ((int) $data['invoice_id'] !== (int) $payment->invoice_id) {
+            return redirect()->route('billing.index')
+                ->with('status', [
+                    'type' => 'error',
+                    'message' => 'That payment no longer matches the order shown. Please try again.',
+                ]);
         }
 
         $plan = Plan::where('slug', $data['plan'])->where('is_active', true)->firstOrFail();
@@ -262,10 +276,11 @@ class BillingController extends Controller
                 'exception' => $e::class,
                 'message' => $e->getMessage(),
                 'provider_status' => $e->providerStatus,
+                'category' => $e->category,
             ]);
 
             return redirect()->route('billing.index')
-                ->with('error', 'We could not reach the payment provider. Please try again in a moment.');
+                ->with('error', $e->userMessage());
         }
 
         return redirect()->route('billing.pay', $new);
