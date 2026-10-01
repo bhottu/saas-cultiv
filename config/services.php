@@ -33,6 +33,20 @@ return [
         'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
     ],
 
+    // Google sign-in (OAuth via Laravel Socialite).
+    //
+    // Credentials live in .env only — never in this file. `redirect` must match an
+    // Authorized redirect URI registered in the Google Cloud console EXACTLY, or
+    // Google rejects the exchange with redirect_uri_mismatch.
+    //
+    // Only identity scopes are requested (see GoogleAuthController): openid, profile,
+    // email. Cultiv One never asks for Gmail, Drive, Calendar or contacts.
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_REDIRECT_URI', env('APP_URL').'/auth/google/callback'),
+    ],
+
     // QRIS.PW payment gateway. Secrets stay in .env — never in the browser.
     'qrispw' => [
         'api_key' => env('QRISPW_API_KEY'),
