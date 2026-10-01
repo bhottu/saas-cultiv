@@ -100,7 +100,7 @@
             {{-- ---------------- Right: cart + checkout (5 cols) ---------------- --}}
             <div class="lg:col-span-5">
                 <div class="flex h-[calc(100vh-12rem)] min-h-[560px] flex-col rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                    <div class="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <div class="flex shrink-0 items-center justify-between border-b border-gray-100 pb-3">
                         <div class="flex items-center gap-2">
                             <h3 class="text-base font-bold text-gray-900">{{ __('Current order') }}</h3>
                             <span id="pos-cart-badge" class="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-700">0</span>
@@ -110,15 +110,26 @@
                         </button>
                     </div>
 
-                    <div id="pos-cart-items" class="flex-1 divide-y divide-gray-100 overflow-y-auto py-2"></div>
+                    {{-- min-h-0 is load-bearing. A flex item defaults to min-height:auto, so without it
+                         this list refuses to shrink below its content and pushes every
+                         section below it (discount, totals, checkout) out of the
+                         fixed-height column instead of scrolling internally. --}}
+                    <div id="pos-cart-items" class="min-h-0 flex-1 divide-y divide-gray-100 overflow-y-auto py-2"></div>
 
-                    {{-- Discount + tax share one responsive row; both containers
-                         close properly so nothing below them can nest inside. --}}
-                    <div class="space-y-2 border-t border-gray-100 pt-3">
-                        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {{-- Discount + tax are one column at every width.
+
+                         This row used to be `grid-cols-1 sm:grid-cols-2`, which put the
+                         two side by side inside the narrow POS column (~5/12 of the
+                         page). That needed min-w-0 on the cells and controls to stop the
+                         content spilling into the Tax track, and shrink-0 on the labels
+                         to stop them squashing. With a single full-width row there is no
+                         second track to spill into, so all of that is gone: the controls
+                         now have the whole width and nothing can overlap. --}}
+                    <div class="shrink-0 border-t border-gray-100 pt-3">
+                        <div class="space-y-2">
                             <div class="flex items-center gap-2">
                                 <label for="pos-discount-type" class="text-xs text-gray-500">{{ __('Discount') }}</label>
-                                <select id="pos-discount-type" class="rounded border-gray-300 py-1 text-xs focus:ring-indigo-500">
+                                <select id="pos-discount-type" class="flex-1 rounded border-gray-300 py-1 text-xs focus:ring-indigo-500">
                                     <option value="fixed">{{ __('Fixed (Rp)') }}</option>
                                     <option value="percent">{{ __('Percent (%)') }}</option>
                                 </select>
@@ -134,7 +145,7 @@
                         </div>
                     </div>
 
-                    <dl class="space-y-1.5 border-t border-gray-200 pt-3 text-sm">
+                    <dl class="shrink-0 space-y-1.5 border-t border-gray-200 pt-3 text-sm">
                         <div class="flex justify-between text-xs text-gray-600">
                             <dt>{{ __('Subtotal') }}</dt>
                             <dd id="pos-subtotal" class="font-mono font-medium">Rp 0</dd>
@@ -153,7 +164,7 @@
                         </div>
                     </dl>
 
-                    <div class="mt-4 space-y-3 border-t border-gray-200 pt-3">
+                    <div class="mt-4 shrink-0 space-y-3 border-t border-gray-200 pt-3">
                         <div class="grid grid-cols-2 gap-2">
                             <div>
                                 <label for="pos-payment-method" class="mb-1 block text-xs font-semibold text-gray-500">{{ __('Payment') }}</label>
@@ -236,14 +247,21 @@
     {{-- The SAME partial /sales/create uses, rendered unchanged: same fields, same
          validation errors, same POST to customers.store.
 
-         The wrapper is what carries the Alpine scope the partial needs. It travels with
-         the partial rather than hanging off the page container, so the dialog works
+         The wrapper carries the Alpine scope the partial needs. It travels with the
+         partial rather than hanging off the page container, so the dialog works
          wherever this include is dropped, and the cart engine reaches it through the
-         [x-data^="posCustomerModal"] selector. --}}
-    <div x-data="posCustomerModal({
-            storeUrl: @json($customerStoreUrl),
-            canCreate: @json($canCreateCustomer),
-        })">
+         `pos-open-customer-modal` event.
+
+         @js([...]) — NOT @json(). The config must arrive as ONE argument, the way
+         sales/create passes it. @json() emits literal " characters, which close the
+         x-data="..." attribute early: the browser then hands Alpine a truncated
+         expression, the whole subtree fails to initialise, customerModalOpen never
+         exists and the dialog silently never opens. @js() escapes those quotes to
+         \u0022 and is safe inside an attribute. --}}
+    <div x-data="posCustomerModal(@js([
+            'storeUrl' => $customerStoreUrl,
+            'canCreate' => $canCreateCustomer,
+        ]))">
         @include('sales.partials.customer-modal')
     </div>
 
@@ -260,6 +278,19 @@
                 customerForm: { name: '', phone: '', email: '', address: '' },
                 customerStoreUrl: config.storeUrl,
                 canCreateCustomer: !!config.canCreate,
+
+                /**
+                 * Listen for the button.
+                 *
+                 * The "+ Add Customer" control is plain DOM sitting outside this Alpine
+                 * scope, so it cannot call this method directly. init() closes that gap
+                 * without either side knowing about the other's implementation.
+                 */
+                init() {
+                    this.onOpenRequested = () => this.openCustomerModal();
+
+                    window.addEventListener('pos-open-customer-modal', this.onOpenRequested);
+                },
 
                 openCustomerModal() {
                     if (!this.canCreateCustomer) return;
@@ -404,14 +435,14 @@
         const ADD_CUSTOMER = '__add_customer__';
         let lastCustomerValue = dom.customer.value;
 
-        // Open the shared modal. The Alpine scope owns the dialog; this only nudges it.
+        // Open the shared modal.
+        //
+        // The button lives in plain DOM far from the Alpine scope, so it cannot call
+        // openCustomerModal() the way sales/create's @click does. An event says it
+        // without reaching into Alpine's private _x_dataStack (which is not a public
+        // API and silently yields null if the node has not initialised yet).
         function openCustomerModal() {
-            const root = document.querySelector('[x-data^="posCustomerModal"]');
-            const scope = root && root._x_dataStack ? root._x_dataStack[0] : null;
-
-            if (!scope || typeof scope.openCustomerModal !== 'function') return;
-
-            scope.openCustomerModal();
+            window.dispatchEvent(new CustomEvent('pos-open-customer-modal'));
         }
 
         dom.customer.addEventListener('change', () => {
