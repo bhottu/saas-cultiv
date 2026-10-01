@@ -74,10 +74,14 @@ class PricingPresentationTest extends TestCase
         foreach ($modules as $list) {
             $this->assertStringContainsString('Point of Sale (POS)', $list);
         }
+        // One mention per plan card, plus one in the dedicated Modules section — the
+        // page now explains modules in their own right, so a single extra mention is
+        // expected. What still must hold is the per-card split checked above: POS lives
+        // in the modules group and never in the features group.
         $this->assertSame(
-            Plan::active()->count(),
+            Plan::active()->count() + 1,
             substr_count($html, 'Point of Sale (POS)'),
-            'POS should appear exactly once per plan card, nowhere else'
+            'POS should appear once per plan card, plus once in the Modules section'
         );
         $this->assertStringNotContainsString('Choose Point of Sale', $html, 'POS must not look like a subscribable plan');
     }
