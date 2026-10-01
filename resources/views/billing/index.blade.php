@@ -10,9 +10,28 @@
         @if (session('error'))
             <div class="bg-red-100 text-red-800 p-3 rounded">{{ session('error') }}</div>
         @endif
+        {{-- The flash is read from the session, not from a `$status` variable the
+             controller never passed. Referring to $status here rendered an empty
+             banner, which is why a refused action showed no reason at all. --}}
         @if (session('status'))
-            <div class="p-3 rounded {{ ($status['type'] ?? 'success') === 'error' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800' }}">
-                {{ $status['message'] ?? '' }}
+            @php $billingStatus = session('status'); @endphp
+            <div class="p-3 rounded {{ ($billingStatus['type'] ?? 'success') === 'error' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800' }}" role="alert">
+                {{ $billingStatus['message'] ?? '' }}
+            </div>
+        @endif
+
+        {{-- Rejected requests must never fail silently.
+             The pending-payment modal posts `intent` from its submit button, which
+             is not a form field this page renders an <x-input-error> for. Without
+             this block a rejected request returned the customer to a page that
+             looked untouched, with nothing explaining why. --}}
+        @if ($errors->any())
+            <div class="bg-red-100 text-red-800 p-3 rounded" role="alert">
+                <ul class="list-disc list-inside space-y-1">
+                    @foreach ($errors->all() as $message)
+                        <li>{{ $message }}</li>
+                    @endforeach
+                </ul>
             </div>
         @endif
 
@@ -88,10 +107,10 @@
                     <input type="hidden" name="cycle" value="{{ $pendingCheckout['cycle'] }}">
 
                     <div class="p-6">
-                        <h3 class="text-lg font-medium text-gray-900">{{ __('Pembayaran Masih Menunggu') }}</h3>
+                        <h3 class="text-lg font-medium text-gray-900">{{ __('Payment pending') }}</h3>
                         <p class="mt-2 text-sm text-gray-600">
-                            {{ __('Anda memiliki 1 pesanan yang menunggu pembayaran.') }}<br>
-                            {{ __('Apakah Anda ingin membatalkan pesanan sebelumnya dan membuat pesanan baru?') }}
+                            {{ __('You have a payment that has not been completed yet.') }}<br>
+                            {{ __('Would you like to continue that payment, or cancel it and create a new one?') }}
                         </p>
                         <p class="mt-3 text-sm text-gray-500">
                             {{ \App\Services\Money::formatRupiah($pendingCheckout['amount']) }}
@@ -99,15 +118,19 @@
                     </div>
 
                     <div class="bg-gray-50 px-6 py-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                        {{-- Plain submit buttons carrying name="intent". A JS
-                             form.submit() is deliberately NOT used: it bypasses the
-                             submitter and would drop the intent value entirely. --}}
+                        {{-- Plain submit buttons carrying name="intent".
+                             Two rules keep this working, and both were broken before:
+                              - no JS form.submit(), which bypasses the submitter and would
+                               drop the intent value entirely;
+                             - the shared submit-button handler must not disable the button
+                               synchronously, which would strip name/value from the entry
+                               list. See lockSubmitter() in resources/js/submit-button.js. --}}
                         <x-secondary-button type="submit" name="intent" value="continue">
-                            {{ __('Lanjut Bayar') }}
+                            {{ __('Continue payment') }}
                         </x-secondary-button>
 
                         <x-danger-button type="submit" name="intent" value="replace">
-                            {{ __('Batalkan & Buat Baru') }}
+                            {{ __('Cancel & create new') }}
                         </x-danger-button>
                     </div>
                 </form>

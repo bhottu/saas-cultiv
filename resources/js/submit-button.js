@@ -110,9 +110,40 @@ function markBusy(button) {
 
     button.classList.add('opacity-70', 'cursor-not-allowed');
 
+    lockSubmitter(button);
+
     // If the page never navigates (a failed fetch, a blocked request), free the
     // button again rather than stranding the user.
     window.setTimeout(() => releaseBusy(button), SAFETY_TIMEOUT_MS);
+}
+
+/**
+ * Disables the submitter one task LATER than the click that submitted the form.
+ *
+ * This must not happen synchronously inside the submit listener. The HTML form
+ * submission algorithm builds the form's entry list only AFTER the submit event
+ * has finished dispatching, and a submitter that is `disabled` at that moment is
+ * left out of the entry list — so its `name`/`value` pair never reaches the
+ * server.
+ *
+ * That is not hypothetical: the billing "Continue payment" / "Cancel & create
+ * new" buttons carry `name="intent"`, and disabling them in the capture-phase
+ * listener stripped `intent` from the POST. The backend then rejected the
+ * request as invalid, the customer was returned to /billing with the modal
+ * already dismissed and nothing done, and the error was invisible because the
+ * page renders no field for `intent`.
+ *
+ * One task is the smallest delay that lands after the entry list exists, while
+ * still being far quicker than a human can click twice.
+ */
+function lockSubmitter(button) {
+    window.setTimeout(() => {
+        // The page may have navigated or errored out in the meantime; only keep
+        // the lock while the button is still showing its busy state.
+        if (button.dataset.busyApplied === '1') {
+            button.disabled = true;
+        }
+    }, 0);
 }
 
 function releaseBusy(button) {
@@ -127,6 +158,13 @@ function releaseBusy(button) {
     button.disabled = false;
     button.removeAttribute('aria-busy');
     button.classList.remove('opacity-70', 'cursor-not-allowed');
+
+    // Re-arm the form now that the button is usable again. Without this a form
+    // whose request never navigated (a failed fetch, a blocked request) would be
+    // permanently refused by the double-submit guard.
+    if (button.form) {
+        delete button.form.dataset.busySubmitted;
+    }
 
     if (button.tagName === 'BUTTON' && button.dataset.busyOriginalHtml !== undefined) {
         button.innerHTML = button.dataset.busyOriginalHtml;
@@ -156,6 +194,17 @@ export function installSubmitLoading() {
             return;
         }
 
+        // Double-submit guard. The submitter is no longer disabled synchronously
+        // (see lockSubmitter), so an impatient second click would otherwise send
+        // the request again — a second payment, or a second cancellation. The
+        // first submission of a form is let through; every later one is stopped.
+        if (form.dataset.busySubmitted === '1') {
+            event.preventDefault();
+            return;
+        }
+
+        form.dataset.busySubmitted = '1';
+
         submitButtonsOf(form).forEach((button) => {
             // Alpine already owns the disabled state on these (e.g. the sales form),
             // and fighting it would fight x-bind:disabled.
@@ -171,5 +220,11 @@ export function installSubmitLoading() {
     // bfcache, where the DOM is handed back exactly as the user left it.
     window.addEventListener('pageshow', () => {
         document.querySelectorAll('[data-busy-applied="1"]').forEach(releaseBusy);
+
+        // Belt and braces: a form must never come back from the back/forward
+        // cache still marked as submitted, or it would refuse to work.
+        document
+            .querySelectorAll('form[data-busy-submitted="1"]')
+            .forEach((form) => delete form.dataset.busySubmitted);
     });
 }

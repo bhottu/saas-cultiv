@@ -221,9 +221,9 @@ class BillingCheckoutTest extends TestCase
         $this->assertSame('pending', $existing->fresh()->status);
 
         $html = $this->billingIndexHtml();
-        $this->assertStringContainsString('Pembayaran Masih Menunggu', $html);
-        $this->assertStringContainsString('Lanjut Bayar', $html);
-        $this->assertStringContainsString('Buat Baru', $html);
+        $this->assertStringContainsString('Payment pending', $html);
+        $this->assertStringContainsString('Continue payment', $html);
+        $this->assertStringContainsString('Cancel &amp; create new', $html);
     }
 
     public function test_b_continue_returns_to_the_existing_qr_without_creating_anything(): void
@@ -255,7 +255,7 @@ class BillingCheckoutTest extends TestCase
 
         $res->assertRedirect(route('billing.index'));
         $res->assertSessionHas('status');
-        $this->assertStringContainsString('kedaluwarsa', session('status')['message']);
+        $this->assertStringContainsString('has expired', session('status')['message']);
         $this->assertSame('expired', $stale->fresh()->status);
         $this->assertSame(1, Payment::count());
     }
@@ -300,7 +300,7 @@ class BillingCheckoutTest extends TestCase
 
         $res->assertRedirect(route('billing.index'));
         $res->assertSessionHas('status');
-        $this->assertStringContainsString('tidak dapat dibatalkan', session('status')['message']);
+        $this->assertStringContainsString('cannot be cancelled', session('status')['message']);
 
         $this->assertSame('paid', $paid->fresh()->status);
         $this->assertNull($paid->fresh()->cancelled_at);

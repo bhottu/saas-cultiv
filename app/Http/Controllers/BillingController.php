@@ -218,7 +218,7 @@ class BillingController extends Controller
 
         $plan = Plan::where('slug', $data['plan'])->where('is_active', true)->firstOrFail();
 
-        // "Lanjut Bayar" — only ever to a payment that is genuinely still payable. If it
+        // "Continue payment" — only ever to a payment that is genuinely still payable. If it
         // expired in the meantime it is settled here and the customer is told plainly,
         // rather than being sent to a dead QR.
         if ($data['intent'] === 'continue') {
@@ -230,24 +230,24 @@ class BillingController extends Controller
 
             return redirect()->route('billing.index')->with(
                 'status',
-                ['type' => 'error', 'message' => 'Pembayaran sebelumnya sudah kedaluwarsa. Silakan membuat pembayaran baru untuk melanjutkan berlangganan.']
+                ['type' => 'error', 'message' => 'That payment has expired. Please make a new payment to continue your subscription.']
             );
         }
 
-        // "Batalkan & Buat Baru" — the old payment is marked cancelled, never deleted.
+        // "Cancel & create new" — the old payment is marked cancelled, never deleted.
         if (! $payment->isCancellable()) {
             return redirect()->route('billing.index')->with('status', [
                 'type' => 'error',
                 'message' => $payment->isSettled()
-                    ? 'Pembayaran sudah berhasil dan tidak dapat dibatalkan.'
-                    : 'Pesanan sebelumnya sudah diproses. Silakan cek status pembayaran.',
+                    ? 'That payment has already been completed and cannot be cancelled.'
+                    : 'The previous payment has already been processed. Please check its status.',
             ]);
         }
 
         if (! $this->payments->cancelUnsettled($payment, $request->user())) {
             return redirect()->route('billing.index')->with('status', [
                 'type' => 'error',
-                'message' => 'Pesanan sebelumnya sudah diproses. Silakan cek status pembayaran.',
+                'message' => 'The previous payment has already been processed. Please check its status.',
             ]);
         }
 

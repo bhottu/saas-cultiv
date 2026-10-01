@@ -119,6 +119,28 @@ class SubmitLoadingTest extends TestCase
         $this->assertStringContainsString('data-busy-label="{{ __(\'Deleting…\') }}"', $create);
     }
 
+    public function test_it_never_disables_the_submitter_synchronously(): void
+    {
+        // Production regression: the billing modal's two buttons carry name="intent",
+        // and disabling the submitter inside the capture-phase submit listener stripped
+        // that pair from the POST body. The browser builds a form's entry list only
+        // AFTER the submit event, and a disabled submitter is excluded from it — so
+        // `intent` never arrived, the request was rejected, and both buttons silently
+        // did nothing. The disable must be deferred to a later task.
+        $this->assertStringContainsString('function lockSubmitter(button)', $this->script);
+        $this->assertStringContainsString('window.setTimeout(() => {', $this->script);
+
+        // The lock is not optional: without the deferred disable there is still a
+        // genuine double-submit guard.
+        $this->assertStringContainsString("form.dataset.busySubmitted === '1'", $this->script);
+        $this->assertStringContainsString('event.preventDefault();', $this->script);
+        $this->assertStringContainsString("form.dataset.busySubmitted = '1'", $this->script);
+
+        // And the guard must be re-armed when the button is released, otherwise a
+        // request that never navigated would leave the form permanently unusable.
+        $this->assertStringContainsString('delete button.form.dataset.busySubmitted', $this->script);
+    }
+
     public function test_it_restores_state_and_cannot_stick_forever(): void
     {
         // Back/forward navigation hands the DOM back exactly as it was left.
