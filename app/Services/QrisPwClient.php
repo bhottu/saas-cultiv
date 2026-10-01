@@ -58,11 +58,45 @@ class QrisPwClient
     }
 
     /**
+     * Refuse an amount the gateway can never accept.
+     *
+     * QRIS.PW answers anything under its minimum with a 400 "Minimum amount is
+     * Rp 1,000". Production hit exactly that: the Pro plan's price had been set to 5
+     * in the database, the provider refused it, and the customer was told "Unable to
+     * create the payment request. Please try again." — advice that can never work,
+     * because no amount of retrying changes a plan's price.
+     *
+     * Checking here means the operator gets a log line naming the plan, its price and
+     * the floor, and the customer gets a configuration message instead of a retry
+     * loop. It also avoids a pointless round-trip to the provider.
+     */
+    private function assertAmountAcceptable(string $operation, array $payload, array $context): void
+    {
+        $amount = (int) ($payload['amount'] ?? 0);
+        $minimum = (int) config('services.qrispw.min_amount');
+
+        if ($amount >= $minimum) {
+            return;
+        }
+
+        Log::error('qrispw.amount_below_minimum', $context + [
+            'endpoint' => $operation,
+            'amount' => $amount,
+            'provider_minimum' => $minimum,
+            // The most likely cause by far: a plan priced below the gateway floor.
+            'likely_cause' => 'check plans.price_monthly / price_yearly for this plan',
+        ]);
+
+        throw PaymentProviderException::amountBelowMinimum($operation, $amount, $minimum, $context);
+    }
+
+    /**
      * @param  array<string, mixed>  $context  ids for the log line; never a credential
      */
     public function createPayment(array $payload, array $context = []): array
     {
         $this->assertConfigured('create-payment', $context);
+        $this->assertAmountAcceptable('create-payment', $payload, $context);
 
         try {
             $response = Http::withHeaders([

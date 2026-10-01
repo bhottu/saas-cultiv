@@ -174,6 +174,10 @@ class PaymentService
             'payment_id' => $payment->id,
             'invoice_id' => $payment->invoice_id,
             'order_id' => $payment->order_id,
+            // The plan is what an operator needs when an amount is refused: the price
+            // lives on plans, so this points straight at the row to inspect.
+            'plan_id' => $payment->invoice?->metadata['plan_id'] ?? null,
+            'amount' => (int) $payment->amount,
         ]);
 
         // A pending payment is payable for exactly PAYMENT_WINDOW_MINUTES from the moment

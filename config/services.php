@@ -38,6 +38,16 @@ return [
         'api_key' => env('QRISPW_API_KEY'),
         'api_secret' => env('QRISPW_API_SECRET'),
         'webhook_secret' => env('QRISPW_WEBHOOK_SECRET'),
+
+        /*
+         | The gateway rejects any amount below this with a 400 "Minimum amount is
+         | Rp 1,000". Checking it locally turns a confusing provider refusal — which the
+         | customer is wrongly told to "try again" for something retrying cannot fix —
+         | into a precise internal error naming the plan and its price. Override only if
+         | the provider changes its floor.
+         */
+        'min_amount' => (int) env('QRISPW_MIN_AMOUNT', 1000),
+
         'endpoints' => [
             'create' => env('QRISPW_BASE_URL', 'https://qris.pw/api').'/create-payment.php',
             'status' => env('QRISPW_BASE_URL', 'https://qris.pw/api').'/check-payment.php',

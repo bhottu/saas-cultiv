@@ -66,8 +66,30 @@ class PaymentProviderException extends RuntimeException
     public static function notConfigured(string $operation, string $missing, array $context = []): self
     {
         $e = new self("QRIS.PW {$operation} is not configured ({$missing} is missing).");
-        $e->category = 'auth';
+        $e->category = 'configuration';
         $e->context = $context + ['endpoint' => $operation, 'missing' => $missing];
+
+        return $e;
+    }
+
+    /**
+     * The amount can never be accepted by the gateway.
+     *
+     * Almost always a mispriced plan (a price edited directly in the database) rather
+     * than anything the customer did. Retrying cannot help, so this is reported as a
+     * configuration fault instead of a "try again" request error.
+     */
+    public static function amountBelowMinimum(string $operation, int $amount, int $minimum, array $context = []): self
+    {
+        $e = new self(
+            "QRIS.PW {$operation} refused locally: amount {$amount} is below the provider minimum of {$minimum}."
+        );
+        $e->category = 'configuration';
+        $e->context = $context + [
+            'endpoint' => $operation,
+            'amount' => $amount,
+            'provider_minimum' => $minimum,
+        ];
 
         return $e;
     }
@@ -83,7 +105,7 @@ class PaymentProviderException extends RuntimeException
     public function userMessage(): string
     {
         return match ($this->category) {
-            'auth' => 'Payment configuration error. Please contact the administrator.',
+            'auth', 'configuration' => 'Payment configuration error. Please contact the administrator.',
             'request' => 'Unable to create the payment request. Please try again.',
             'rate_limit' => 'The payment service is busy. Please try again in a moment.',
             'network' => 'The payment service is temporarily unavailable. Please try again later.',

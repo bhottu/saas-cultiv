@@ -7,8 +7,10 @@ use App\Models\Payment;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -372,7 +374,139 @@ class PendingPaymentResolveTest extends TestCase
         $this->assertSame(1, Payment::count());
     }
 
-    /** Both buttons must submit the intent that the backend switches on. */
+    /**
+ * Scenario 1 — a previously cancelled payment must not block a new checkout.
+ *
+ * This is the reported production situation: INV-2026-000005 (Rp 39.000) was cancelled,
+ * and the customer still could not subscribe. `cancelled` is terminal but not live, so
+ * it must never be treated as an active pending payment.
+ */
+public function test_scenario_1_a_cancelled_payment_never_blocks_a_new_one(): void
+{
+    $this->fakeGateway();
+
+    // The historical cancelled invoice from production, kept as audit history.
+    $cancelledInvoice = Invoice::create([
+        'tenant_id' => $this->tenant->id, 'invoice_number' => 'INV-2026-000005',
+        'amount' => 39_000, 'currency' => 'IDR', 'status' => 'cancelled',
+        'description' => 'Starter (monthly) subscription',
+        'issued_at' => now()->subHour(), 'due_at' => now()->subHour(),
+    ]);
+    $cancelled = Payment::create([
+        'tenant_id' => $this->tenant->id, 'user_id' => $this->owner->id,
+        'invoice_id' => $cancelledInvoice->id, 'order_id' => 'ORD-PAGVK7SRHDXWY',
+        'amount' => 39_000, 'currency' => 'IDR', 'status' => 'cancelled',
+        'cancelled_at' => now()->subMinutes(30), 'expires_at' => now()->addMinutes(5),
+    ]);
+
+    // A fresh subscription must go straight through.
+    $res = $this->member()->post('/billing/checkout', ['plan' => 'pro', 'cycle' => 'monthly']);
+
+    $fresh = Payment::where('status', 'pending')->firstOrFail();
+
+    $res->assertRedirect(route('billing.pay', $fresh));
+    $res->assertSessionHasNoErrors();
+    $this->assertNull(session('pending_checkout'), 'A cancelled payment must not raise the prompt.');
+
+    // Brand new identifiers, and the old record untouched.
+    $this->assertNotSame($cancelled->order_id, $fresh->order_id);
+    $this->assertNotSame($cancelledInvoice->id, $fresh->invoice_id);
+    $this->assertNotNull($fresh->provider_transaction_id);
+    $this->assertSame('cancelled', $cancelled->fresh()->status);
+    $this->assertDatabaseHas('invoices', ['invoice_number' => 'INV-2026-000005', 'status' => 'cancelled']);
+}
+
+/** Every terminal status is ignored when looking for a blocking payment. */
+public function test_scenario_1_every_terminal_status_is_ignored_when_looking_for_a_block(): void
+{
+    $this->fakeGateway();
+
+    $invoice = Invoice::create([
+        'tenant_id' => $this->tenant->id, 'invoice_number' => 'INV-TERM-'.Str::random(6),
+        'amount' => 39_000, 'currency' => 'IDR', 'status' => 'cancelled',
+        'description' => 'history', 'issued_at' => now(), 'due_at' => now()->addHour(),
+    ]);
+
+    // cancelled / expired / failed all sit in this workspace's history. None of them is
+    // an active pending payment, so none may hold up a new checkout.
+    foreach (['cancelled', 'expired', 'failed'] as $status) {
+        Payment::create([
+            'tenant_id' => $this->tenant->id, 'user_id' => $this->owner->id,
+            'invoice_id' => $invoice->id, 'order_id' => 'ORD-'.Str::random(14),
+            'amount' => 39_000, 'currency' => 'IDR', 'status' => $status,
+            // A future expiry on purpose: even a stale-dated terminal row is not live.
+            'expires_at' => now()->addMinutes(10),
+        ]);
+    }
+
+    $res = $this->member()->post('/billing/checkout', ['plan' => 'starter', 'cycle' => 'monthly']);
+
+    $res->assertRedirect(route('billing.pay', Payment::where('status', 'pending')->firstOrFail()));
+    $this->assertNull(session('pending_checkout'));
+    $this->assertSame(1, Payment::where('status', 'pending')->count());
+}
+
+/** Scenario 2 — a genuinely live pending payment still uses the existing prompt. */
+public function test_scenario_2_a_live_pending_payment_uses_the_existing_prompt(): void
+{
+    $this->fakeGateway();
+    $live = $this->paymentWithQr(now()->addMinutes(8));
+
+    $res = $this->member()->post('/billing/checkout', ['plan' => 'pro', 'cycle' => 'monthly']);
+
+    $res->assertRedirect(route('billing.index'));
+    $res->assertSessionHas('pending_checkout');
+    $this->assertSame(1, Payment::count(), 'No duplicate active payment may be created.');
+    $this->assertSame('pending', $live->fresh()->status);
+}
+
+/** Scenario 3 — a pending payment past its window is settled and does not block. */
+public function test_scenario_3_a_stale_pending_payment_is_settled_and_does_not_block(): void
+{
+    $this->fakeGateway();
+    $stale = $this->paymentWithQr(now()->subMinute());
+
+    $res = $this->member()->post('/billing/checkout', ['plan' => 'pro', 'cycle' => 'monthly']);
+
+    $fresh = Payment::where('status', 'pending')->firstOrFail();
+
+    $res->assertRedirect(route('billing.pay', $fresh));
+    $this->assertNull(session('pending_checkout'));
+    $this->assertSame('expired', $stale->fresh()->status);
+}
+
+/**
+ * Scenario 4 — the provider is unreachable: the customer gets a safe message and the
+ * operator keeps the technical detail.
+ */
+public function test_scenario_4_a_provider_failure_is_safe_for_the_user_and_verbose_in_the_log(): void
+{
+    Log::spy();
+
+    Http::fake(function () {
+        throw new ConnectionException('cURL error 28: Operation timed out after 15000 milliseconds');
+    });
+
+    $res = $this->member()->post('/billing/checkout', ['plan' => 'starter', 'cycle' => 'monthly']);
+
+    $res->assertRedirect(route('billing.index'));
+    $this->assertStringContainsString('temporarily unavailable', session('error'));
+
+    // The user is told nothing about the provider, the host, or the transport.
+    foreach (['cURL', 'qris.pw', 'ConnectionException', 'timed out'] as $leak) {
+        $this->assertStringNotContainsString($leak, session('error'));
+    }
+
+    // The operator keeps it.
+    Log::shouldHaveReceived('error')
+        ->withArgs(fn (string $message, array $context = []) => $message === 'qrispw.create.transport_failed'
+            && ($context['reason'] ?? null) === 'timeout')
+        ->atLeast()->once();
+
+    $this->assertSame(0, Payment::count());
+}
+
+/** Both buttons must submit the intent that the backend switches on. */
     public function test_the_modal_buttons_post_the_two_intents_the_backend_expects(): void
     {
         $html = $this->modalHtml();
