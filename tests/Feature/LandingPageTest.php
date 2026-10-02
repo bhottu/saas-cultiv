@@ -43,6 +43,82 @@ class LandingPageTest extends TestCase
         $this->assertStringContainsString('Cultiv One — The Smarter Way to Manage Your Business', $html);
     }
 
+    /**
+     * The hamburger and the panel it controls must share ONE Alpine scope.
+     *
+     * This shipped broken once: the button and the panel each declared their own
+     * `x-data="{ open: false }"`, so clicking the button flipped `open` in the
+     * button's scope while the panel's copy stayed false — the mobile menu could
+     * never appear. A markup assertion would not have caught it, so this walks the
+     * real DOM: the button must be a descendant of the same element that owns the
+     * scope, and the panel must be inside it too.
+     */
+    public function test_the_mobile_menu_button_and_panel_share_one_alpine_scope(): void
+    {
+        $html = $this->html();
+
+        // Exactly one scope: a second `open` would mean a second, disconnected state.
+        $this->assertSame(
+            1,
+            substr_count($html, 'x-data="{ open: false }"'),
+            'The navbar must declare a single `open` scope.'
+        );
+
+        // Fully qualified: this file sits in a namespace, so a bare DOMDocument
+        // would resolve to Tests\Feature\DOMDocument and fail.
+        $dom = new \DOMDocument();
+        libxml_use_internal_errors(true);
+        $dom->loadHTML($html);
+        $xpath = new \DOMXPath($dom);
+
+        $button = $xpath->query("//button[@aria-controls='mobile-nav']")->item(0);
+        $this->assertNotNull($button, 'The menu button must point at the mobile panel.');
+
+        // Walk up from the button to the element that actually owns x-data.
+        $scope = $button->parentNode;
+        while ($scope && ! str_contains($scope->getAttribute('x-data'), 'open')) {
+            $scope = $scope->parentNode;
+        }
+        $this->assertNotNull($scope, 'The menu button must live inside the `open` scope.');
+
+        // And the panel must be a descendant of that very scope, or the toggle is a no-op.
+        $panel = $xpath->query("//*[@id='mobile-nav']")->item(0);
+        $this->assertNotNull($panel, 'The mobile panel must exist.');
+
+        $ancestor = $panel->parentNode;
+        $inside = false;
+        while ($ancestor) {
+            if ($ancestor === $scope) {
+                $inside = true;
+                break;
+            }
+            $ancestor = $ancestor->parentNode;
+        }
+
+        $this->assertTrue($inside, 'The mobile panel must sit inside the same Alpine scope as its button.');
+    }
+
+    /**
+     * The disclosure has to be reachable without JavaScript being interactive yet, and
+     * must stay wired for the keyboard: the panel is the element `aria-controls`
+     * points at, and Escape closes the menu from anywhere on the page.
+     */
+    public function test_the_mobile_disclosure_is_wired_for_accessibility(): void
+    {
+        $html = $this->html();
+
+        $this->assertStringContainsString('x-bind:aria-expanded="open"', $html);
+        $this->assertStringContainsString('id="mobile-nav"', $html);
+        $this->assertStringContainsString('x-on:keydown.escape.window="open = false"', $html);
+
+        // The panel is hidden by default through x-cloak, so no flash of links on load.
+        $this->assertMatchesRegularExpression(
+            '/id="mobile-nav"[^>]*x-show="open"[^>]*x-cloak|x-show="open"[^>]*x-cloak[^>]*id="mobile-nav"/s',
+            $html,
+            'The mobile panel must be x-show + x-cloak driven.'
+        );
+    }
+
     public function test_the_sections_appear_in_reading_order(): void
     {
         $html = $this->html();

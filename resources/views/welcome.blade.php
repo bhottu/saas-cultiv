@@ -26,7 +26,13 @@
         </a>
 
         {{-- ---------------------------------------------------------------- Navbar --}}
-        <header class="sticky top-0 z-40 border-b border-gray-100 bg-white/90 backdrop-blur">
+        {{-- The bar and the mobile panel share ONE Alpine scope: the button toggles `open`
+             and the panel reads that same value. Two separate x-data roots would each keep
+             their own copy of it and the menu would never actually open. Escape closes it
+             from anywhere on the page. --}}
+        <header class="sticky top-0 z-40 border-b border-gray-100 bg-white/90 backdrop-blur"
+                x-data="{ open: false }"
+                x-on:keydown.escape.window="open = false">
             <nav class="mx-auto max-w-6xl px-4" aria-label="{{ __('Main') }}">
                 <div class="flex h-16 items-center justify-between gap-3">
                     <a href="{{ route('home') }}" class="min-w-0 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
@@ -57,12 +63,10 @@
                             {{ __('Start free') }}
                         </a>
 
-                        {{-- Mobile disclosure. The button and the panel are separate Alpine
-                             roots, so the icon and the list toggle independently; the panel
-                             sits under a fixed h-16 bar and never grows the navbar itself. --}}
+                        {{-- Mobile disclosure. Toggles the shared `open` state owned by the
+                             header, which the panel below reads. --}}
                         <button type="button"
                                 class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-gray-700 transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 lg:hidden"
-                                x-data="{ open: false }"
                                 x-on:click="open = !open"
                                 x-bind:aria-expanded="open"
                                 aria-controls="mobile-nav"
@@ -73,22 +77,24 @@
                     </div>
                 </div>
             </nav>
+
+            {{-- Mobile panel. It lives inside the header so it inherits the shared scope,
+                 and below the fixed h-16 bar so the navbar itself never grows. Tapping any
+                 link closes it through the click handler. --}}
+            <div id="mobile-nav" x-show="open" x-cloak
+                 x-on:click="open = false"
+                 class="border-b border-gray-100 bg-white lg:hidden">
+                <nav class="mx-auto max-w-6xl space-y-1 px-4 py-3 text-sm font-medium text-gray-700" aria-label="{{ __('Mobile') }}">
+                    <a href="#features" class="block rounded-lg px-2 py-2.5 hover:bg-gray-50">{{ __('Features') }}</a>
+                    <a href="#modules" class="block rounded-lg px-2 py-2.5 hover:bg-gray-50">{{ __('Modules') }}</a>
+                    <a href="#pricing" class="block rounded-lg px-2 py-2.5 hover:bg-gray-50">{{ __('Pricing') }}</a>
+                    <a href="#faq" class="block rounded-lg px-2 py-2.5 hover:bg-gray-50">{{ __('FAQ') }}</a>
+                    @guest
+                        <a href="{{ route('login') }}" class="block rounded-lg px-2 py-2.5 hover:bg-gray-50">{{ __('Log in') }}</a>
+                    @endguest
+                </nav>
+            </div>
         </header>
-{{-- Mobile panel, under the fixed-height bar so the navbar never grows. --}}
-        <div id="mobile-nav" x-data="{ open: false }" x-show="open" x-cloak
-             x-on:click="open = false"
-             x-on:keydown.escape.window="open = false"
-             class="border-b border-gray-100 bg-white lg:hidden">
-            <nav class="mx-auto max-w-6xl space-y-1 px-4 py-3 text-sm font-medium text-gray-700" aria-label="{{ __('Mobile') }}">
-                <a href="#features" class="block rounded-lg px-2 py-2.5 hover:bg-gray-50">{{ __('Features') }}</a>
-                <a href="#modules" class="block rounded-lg px-2 py-2.5 hover:bg-gray-50">{{ __('Modules') }}</a>
-                <a href="#pricing" class="block rounded-lg px-2 py-2.5 hover:bg-gray-50">{{ __('Pricing') }}</a>
-                <a href="#faq" class="block rounded-lg px-2 py-2.5 hover:bg-gray-50">{{ __('FAQ') }}</a>
-                @guest
-                    <a href="{{ route('login') }}" class="block rounded-lg px-2 py-2.5 hover:bg-gray-50">{{ __('Log in') }}</a>
-                @endguest
-            </nav>
-        </div>
 
         <main id="main">
             {{-- ---------------------------------------------------------------- Hero --}}
