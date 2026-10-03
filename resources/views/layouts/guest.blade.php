@@ -5,11 +5,12 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>{{ config('app.name', 'Cultiv One') }} - {{ config('app.tagline', 'The smarter way to manage your business') }}</title>
-        <meta name="description" content="{{ config('app.tagline', 'The smarter way to manage your business') }}">
-        <meta property="og:title" content="{{ config('app.name', 'Cultiv One') }} - {{ config('app.tagline', 'The smarter way to manage your business') }}">
-        <meta property="og:description" content="{{ config('app.tagline', 'The smarter way to manage your business') }}">
-        <meta name="theme-color" content="#4f46e5">
+        {{-- Every page inside this layout is behind authentication: login, register,
+             password reset, email verification. None may enter a search index, and
+             none should be offered as a social preview. The page's own title comes
+             from config('seo.route_titles'), keyed by route name. --}}
+        <x-seo robots="noindex, nofollow" />
+        <meta name="theme-color" content="{{ config('seo.theme_color') }}">
         <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
         <link rel="alternate icon" type="image/png" sizes="64x64" href="{{ asset('favicon-64.png') }}">
 

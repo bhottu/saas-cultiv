@@ -79,8 +79,13 @@
                     @csrf
                     <div>
                         <x-input-label for="adjust_product_id" :value="__('Product *')" />
+                        {{-- Arriving from a product page arrives with that product already chosen; see
+                             StockController::index() for how $selectOptions guarantees the
+                             option exists even when the paginated list omits it. --}}
                         <select id="adjust_product_id" name="product_id" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                            @foreach ($products as $product)<option value="{{ $product->id }}">{{ $product->name }}</option>@endforeach
+                            @foreach ($selectOptions as $option)
+                                <option value="{{ $option->id }}" @selected((string) $option->id === (string) old('product_id', $selectedProduct?->id))>{{ $option->name }}</option>
+                            @endforeach
                         </select>
                     </div>
                     <div>

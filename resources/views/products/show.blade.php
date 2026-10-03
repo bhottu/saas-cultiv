@@ -27,6 +27,26 @@
             <div class="p-3 rounded {{ ($status['type'] ?? 'success') === 'error' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800' }}">
                 {{ $status['message'] ?? '' }}
             </div>
+
+            {{-- Straight after a product is created there is nothing to stock yet, no
+                 movements, no balance, and the only route to Stock is back through the
+                 sidebar. A plain text link sits under the banner: deliberately not a
+                 button, because "Product created" is the message that matters right now
+                 and a CTA next to it would compete with it. `text-indigo-600 underline`
+                 is the link treatment already used elsewhere in this codebase, so it
+                 reads as clickable without introducing a new colour or a hover-only
+                 affordance.
+
+                 Gated on `inventory.view`, the same permission stock.index enforces, so
+                 nobody is offered a link that would only answer 403. --}}
+            @if (session('product_just_created')
+                && ($status['type'] ?? 'success') !== 'error'
+                && app(\App\Services\BusinessAuthorization::class)->can('inventory.view'))
+                <p class="text-sm">
+                    <a href="{{ route('stock.index', ['product_id' => $product->id]) }}"
+                       class="text-indigo-600 underline hover:text-indigo-800">{{ __('Manage stock for this item or add another product') }}</a>
+                </p>
+            @endif
         @endif
 
         {{-- Summary --}}
@@ -79,7 +99,26 @@
 
         {{-- Stock on hand --}}
         <div class="bg-white shadow rounded-lg p-6">
-            <h3 class="font-semibold mb-3">{{ __('Stock on hand') }}</h3>
+            {{-- The card gains an action without changing its look: the heading keeps its
+                 place, the button sits opposite it on wide screens and wraps onto its own
+                 line on narrow ones, so a long product name can never squeeze it. The
+                 style matches the small indigo action already used in the stock page's
+                 empty state, rather than inventing a new one.
+
+                 Gated on `stock.adjust` AND `inventory.view`: the first is what stock.adjust
+                 enforces on submit, the second is what stock.index enforces on entry. Both
+                 are required so the button is never offered to somebody whose only outcome
+                 would be a 403. --}}
+            <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h3 class="font-semibold">{{ __('Stock on hand') }}</h3>
+
+                @if ($product->track_inventory
+                    && app(\App\Services\BusinessAuthorization::class)->can('inventory.view')
+                    && app(\App\Services\BusinessAuthorization::class)->can('stock.adjust'))
+                    <a href="{{ route('stock.index', ['product_id' => $product->id]) }}"
+                       class="inline-flex shrink-0 items-center px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700">{{ __('Add stock') }}</a>
+                @endif
+            </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm divide-y divide-gray-200">
                 <thead>

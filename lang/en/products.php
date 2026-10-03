@@ -48,4 +48,8 @@ return [
     'e.g. Roasted beans, 250 g pack' => 'e.g. Roasted beans, 250 g pack',
     'e.g. SKU-KOPI-250' => 'e.g. SKU-KOPI-250',
     '— none —' => '— none —',
+
+    // Product detail shortcuts into the existing stock flow.
+    'Manage stock for this item or add another product' => 'Manage stock for this item or add another product',
+    'Add stock' => 'Add stock',
 ];

@@ -5,11 +5,18 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>{{ config('app.name', 'Cultiv One') }} - {{ config('app.tagline', 'The smarter way to manage your business') }}</title>
-        <meta name="description" content="{{ config('app.tagline', 'The smarter way to manage your business') }}">
-        <meta property="og:title" content="{{ config('app.name', 'Cultiv One') }} - {{ config('app.tagline', 'The smarter way to manage your business') }}">
-        <meta property="og:description" content="{{ config('app.tagline', 'The smarter way to manage your business') }}">
-        <meta name="theme-color" content="#4f46e5">
+        {{-- Every page inside this layout is tenant-scoped business data: dashboard,
+             products, sales, stock, billing, team, admin. It must never be indexed and
+             must never be previewable as a social link — a shared URL would otherwise
+             expose a workspace's invoices and stock figures to whoever opened it.
+
+             noindex, nofollow is stated explicitly here rather than left to the
+             config allow-list, so the guarantee does not depend on somebody remembering
+             to keep a route out of that list. The allow-list remains as the fallback for
+             any page that renders <x-seo /> without saying so — such a page is unindexed
+             by default rather than by request. --}}
+        <x-seo robots="noindex, nofollow" />
+        <meta name="theme-color" content="{{ config('seo.theme_color') }}">
         <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
         <link rel="alternate icon" type="image/png" sizes="64x64" href="{{ asset('favicon-64.png') }}">
 

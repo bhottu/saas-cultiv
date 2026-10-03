@@ -124,8 +124,12 @@ class EmailVerificationTest extends TestCase
         $html = $this->actingAs($user)->followingRedirects()
             ->get($this->verificationUrlFor($user));
 
-        $html->assertSee('Email berhasil dikonfirmasi');
-        $html->assertSee('Email Anda telah berhasil diverifikasi. Selamat datang di Cultiv!');
+        // Wording follows lang/id/auth.php, which is the owner's copy. Note "diverifikasi",
+        // not "dikonfirmasi": the same word is used consistently across the whole
+        // verification flow, so asserting the English-ish synonym here would pin a
+        // different product voice than the one that actually ships.
+        $html->assertSee(__('Email verified successfully', [], 'id'));
+        $html->assertSee(__('Your email has been successfully verified. Welcome to Cultiv!', [], 'id'));
     }
 
     public function test_email_is_not_verified_with_invalid_hash(): void

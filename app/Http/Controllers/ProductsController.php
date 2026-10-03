@@ -118,10 +118,17 @@ class ProductsController extends Controller
 
         AuditLogger::log('product.created', $product, ['name' => $product->name, 'sku' => $product->sku]);
 
-        return redirect()->route('products.show', $product)->with('status', [
-            'type' => 'success',
-            'message' => 'Product created.',
-        ]);
+        // A brand new product has no stock and no movements yet, so the page the user
+        // lands on has nothing to show them. `product_just_created` is a separate flag
+        // rather than something inferred from the status message: the same banner is
+        // used by update and delete, and only creation is the moment where pointing at
+        // Stock is the useful next step.
+        return redirect()->route('products.show', $product)
+            ->with('status', [
+                'type' => 'success',
+                'message' => 'Product created.',
+            ])
+            ->with('product_just_created', true);
     }
 
     public function show(Product $product)

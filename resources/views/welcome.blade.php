@@ -6,17 +6,20 @@
 
         {{-- One H1 on the page: the hero headline. Every other section is an H2, so the
              outline stays a real document outline rather than headings used for styling. --}}
-        <title>{{ __('Cultiv One — The Smarter Way to Manage Your Business') }}</title>
-        <meta name="description" content="{{ __('Cultiv One brings sales, inventory, customers, purchasing, payments and reports together in one connected workspace.') }}">
-
-        <meta property="og:type" content="website">
-        <meta property="og:title" content="{{ __('Cultiv One — The Smarter Way to Manage Your Business') }}">
-        <meta property="og:description" content="{{ __('Sales, inventory, customers, purchasing, payments and reports — all connected in one simple workspace.') }}">
-        <meta property="og:url" content="{{ route('home') }}">
-        <meta name="theme-color" content="#4f46e5">
+        {{-- The homepage. `home` opts into config('seo.default_title') rather than the
+             "[page] — Cultiv" pattern (which would read "Cultiv — ... — Cultiv"), and
+             into the organisation / website / page / application JSON-LD. It is also
+             the only route listed in config('seo.indexable_routes'); every other page
+             on the site inherits noindex by omission. --}}
+        <x-seo home />
+        <meta name="theme-color" content="{{ config('seo.theme_color') }}">
 
         <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
         <link rel="alternate icon" type="image/png" sizes="64x64" href="{{ asset('favicon-64.png') }}">
+        {{-- Apple pins the home-screen icon from this tag on iOS; without it Safari
+             falls back to a screenshot of the page. Reuses the existing PWA artwork
+             rather than introducing a second set of icons to keep in step. --}}
+        <link rel="apple-touch-icon" href="{{ asset('pwa-192.png') }}">
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
 

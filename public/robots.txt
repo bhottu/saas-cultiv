@@ -1,0 +1,32 @@
+# robots.txt — Cultiv
+# ---------------------------------------------------------------------------
+# DISINI. File ini dilayani langsung oleh server dari folder public/.
+# Tidak perlu route/controller Laravel untuk mengeditnya.
+#
+# Yang perlu Anda isi sendiri:
+#
+#   User-agent: *
+#   Allow: /
+#   Disallow: /admin
+#   Disallow: /settings
+#   Disallow: /profile
+#   Disallow: /billing
+#   Disallow: /products
+#   Disallow: /sales
+#   Disallow: /stock
+#   Disallow: /tenants
+#   Disallow: /login
+#   Disallow: /register
+#
+#   Sitemap: https://cultiv.id/sitemap.xml
+#
+# CATATAN PENTING
+# File ini hanya permintaan sopan kepada crawler, BUKAN pengaman. Yang benar-benar
+# mencegah halaman privat masuk ke Google adalah tag
+#   <meta name="robots" content="noindex, nofollow">
+# yang sudah dipasang di layouts/app.blade.php (seluruh halaman dashboard) dan
+# layouts/guest.blade.php (login/register).
+# Jangan bergantung pada file ini untuk melindungi data bisnis.
+#
+# Jangan Disallow /css, /js, /images atau /build: crawler butuh file tersebut
+# untuk merender dan memahami halaman.

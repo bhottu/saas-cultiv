@@ -51,12 +51,40 @@ class StockController extends Controller
             ->whereColumn('stock_balances.quantity', '<=', 'products.minimum_stock')
             ->count();
 
+        // Optional pre-selection, so a user arriving here from a product page does not
+        // have to hunt the item out of a list that may not even contain it on page one.
+        // The id is never trusted on its own: it is resolved through the tenant-scoped
+        // Product query and under the SAME conditions the list itself applies, so the
+        // parameter cannot be used to reach a product from another workspace, or one
+        // that is inactive or not inventory-tracked. Anything else simply falls through
+        // as "no pre-selection" rather than erroring on an ordinary link.
+        $selectedProduct = null;
+
+        if ($request->filled('product_id')) {
+            $selectedProduct = Product::query()
+                ->where('tenant_id', $tenant->id)
+                ->where('track_inventory', true)
+                ->where('is_active', true)
+                ->find($request->integer('product_id'));
+        }
+
+        // The options offered by the adjustment form, with the chosen product guaranteed
+        // to be among them. The list is paginated and sorted by name, so a product that
+        // was created a moment ago may not appear on page one; without appending it,
+        // `selected` would name an option that does not exist and the preselection
+        // would fail silently for exactly the newest products.
+        $selectOptions = $products->contains('id', $selectedProduct?->id)
+            ? $products
+            : $products->concat($selectedProduct ? collect([$selectedProduct]) : collect());
+
         return view('stock.index', [
             'products' => $products,
             'warehouses' => $warehouses,
             'warehouse' => $warehouse,
             'balances' => $balances,
             'lowStockCount' => $lowStockCount,
+            'selectedProduct' => $selectedProduct,
+            'selectOptions' => $selectOptions,
         ]);
     }
 

@@ -15,8 +15,14 @@ class AuthenticationTest extends TestCase
         $response = $this->get('/login')
             ->assertOk()
             ->assertSee('Cultiv One')
-            ->assertSee('The smarter way to manage your business')
-            ->assertSee('<title>Cultiv One - The smarter way to manage your business</title>', false);
+            // The page title comes from config('seo.route_titles'); the slogan used to
+            // be hardcoded into the layout for every screen at once.
+            ->assertSee(
+                '<title>'.config('seo.route_titles.login').' — '.config('seo.site_name').'</title>',
+                false
+            )
+            // An auth screen must never be indexable, and must say so in the markup.
+            ->assertSee('name="robots" content="noindex, nofollow"', false);
     }
 
     public function test_users_can_authenticate_using_the_login_screen(): void

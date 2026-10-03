@@ -1,73 +1,54 @@
 <?php
 
 /*
- | Cultiv One - Indonesian strings for the shared shell.
- |
- | Navigation labels, the workspace switcher, notifications and the small pieces of
- | chrome every screen reuses. Terms the Indonesian SaaS audience already borrows
- | in daily use (dashboard, analytics, platform, upgrade) are intentionally left
- | alone: translating them would make the product sound foreign, not localised.
- */
+    Indonesian strings for the common area.
+
+    Whole English sentences are the keys, matching the rest of the application, so a
+    new string is one line here and nothing else has to change. Anything not listed
+    falls back to English through lang/id.json.
+*/
 
 return [
-
-    // Navigation and identity
-    'Main navigation' => 'Navigasi utama',
-    'Open navigation' => 'Buka navigasi',
-    'Close navigation' => 'Tutup navigasi',
-    'Navigation' => 'Navigasi',
-    'Cultiv One home' => 'Beranda Cultiv One',
-    'Platform' => 'Platform',
-    'Overview' => 'Ringkasan',
-    'Analytics' => 'Analitik',
-    'Insights' => 'Wawasan',
-    'More information' => 'Informasi lebih lanjut',
-    'Go back' => 'Kembali',
-    'Accept' => 'Terima',
-    'Reject' => 'Tolak',
-    'Accepting…' => 'Menerima…',
-    'Rejecting…' => 'Menolak…',
-
-    // Workspaces
-    'Select workspace' => 'Pilih workspace',
-    'Select a workspace' => 'Pilih sebuah workspace',
-    'Switch workspace' => 'Ganti workspace',
-    'Manage workspaces' => 'Kelola workspace',
-
-    // Pending invitations
-    'Pending Invitations' => 'Undangan Menunggu',
-    'Invitation pending — choose Accept or Reject to respond.' => 'Ada undangan yang menunggu — pilih Terima atau Tolak untuk merespons.',
-    'invited you to join' => 'mengundang Anda untuk bergabung',
-    'as' => 'sebagai',
-    'Someone' => 'Seseorang',
-
-    // Record wording shared by every list screen
-    'new' => 'baru',
-    'records' => 'catatan',
-    'current' => 'saat ini',
-    'Read only' => 'Hanya baca',
-
-    // Billing / plans
-    'Upgrade to unlock it.' => 'Tingkatkan untuk membuka fitur ini.',
-    'Included in :plans plans.' => 'Tersedia pada paket :plans.',
-
-    // Fullscreen (PWA)
-    'Enter fullscreen' => 'Masuk mode layar penuh',
-    'Exit fullscreen' => 'Keluar dari mode layar penuh',
-
-    // Barcode scanning
-    'Scan a barcode' => 'Pindai kode batang',
-    'Use code' => 'Gunakan kode',
-    'Or type the code' => 'Atau ketik kodenya',
-    'Starting camera…' => 'Mengaktifkan kamera…',
-    'Point the camera at the barcode on the product.' => 'Arahkan kamera ke kode batang pada produk.',
+    'API tokens' => 'Token API',
     'About :field' => 'Tentang :field',
-
-    // Install prompt
+    'Accept' => 'Terima',
+    'Accepting…' => 'Menerima…',
+    'Analytics' => 'Analitik',
+    'Close navigation' => 'Tutup navigasi',
+    'Cultiv One home' => 'Beranda Cultiv One',
+    'Enter fullscreen' => 'Masuk layar penuh',
+    'Exit fullscreen' => 'Keluar layar penuh',
+    'Go back' => 'Kembali',
+    'Included in :plans plans.' => 'Termasuk dalam paket :plans.',
+    'Insights' => 'Wawasan',
     'Install Cultiv One' => 'Pasang Cultiv One',
-
-    // Period filters
+    'Invitation pending — choose Accept or Reject to respond.' => 'Ada undangan yang menunggu — pilih Terima atau Tolak untuk merespons.',
+    'Main navigation' => 'Navigasi utama',
+    'Manage workspaces' => 'Kelola workspace',
+    'More information' => 'Informasi lebih lanjut',
+    'Navigation' => 'Navigasi',
+    'Open navigation' => 'Buka navigasi',
+    'Or type the code' => 'Atau ketik kodenya',
+    'Overview' => 'Ringkasan',
+    'Pending Invitations' => 'Undangan Tertunda',
+    'Platform' => 'Platform',
+    'Point the camera at the barcode on the product.' => 'Arahkan kamera ke barcode pada produk.',
+    'Read only' => 'Hanya baca',
+    'Reject' => 'Tolak',
+    'Rejecting…' => 'Menolak…',
+    'Scan a barcode' => 'Pindai barcode',
+    'Select a workspace' => 'Pilih workspace',
+    'Select workspace' => 'Pilih workspace',
+    'Someone' => 'Seseorang',
+    'Starting camera…' => 'Mengaktifkan kamera…',
+    'Switch workspace' => 'Ganti workspace',
     'This quarter' => 'Kuartal ini',
     'This year' => 'Tahun ini',
-
+    'Upgrade to unlock it.' => 'Tingkatkan untuk membukanya.',
+    'Use code' => 'Gunakan kode',
+    'as' => 'sebagai',
+    'current' => 'saat ini',
+    'invited you to join' => 'mengundang Anda untuk bergabung',
+    'new' => 'baru',
+    'records' => 'catatan',
 ];

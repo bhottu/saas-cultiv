@@ -40,7 +40,18 @@ class LandingPageTest extends TestCase
         $this->assertSame(1, substr_count($html, '<h1'), 'The page must have exactly one H1.');
         $this->assertStringContainsString('Run your business', $html);
         $this->assertStringContainsString('name="description"', $html);
-        $this->assertStringContainsString('Cultiv One — The Smarter Way to Manage Your Business', $html);
+
+        // The title used to be a slogan hardcoded into the template. It is now the
+        // shared default from config/seo.php, so the assertion follows it rather than
+        // pinning a second copy of the same string in a test.
+        $this->assertStringContainsString(
+            '<title>'.config('seo.default_title').'</title>',
+            $html
+        );
+
+        // And the metadata the slogan never provided.
+        $this->assertStringContainsString('rel="canonical"', $html);
+        $this->assertStringContainsString('name="robots" content="index, follow"', $html);
     }
 
     /**

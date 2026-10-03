@@ -1,45 +1,36 @@
 <?php
 
 /*
- | Cultiv One - Indonesian strings for workspaces (tenants).
- |
- | The limit copy here is the most safety-relevant text in the product: it tells a
- | shop owner they have hit their plan ceiling, so it states the number and what to
- | do next rather than just refusing. Placeholders are kept exactly as written.
- */
+    Indonesian strings for the tenants area.
+
+    Whole English sentences are the keys, matching the rest of the application, so a
+    new string is one line here and nothing else has to change. Anything not listed
+    falls back to English through lang/id.json.
+*/
 
 return [
-
-    'Your Workspaces' => 'Workspace Anda',
-    'Add Workspace' => 'Tambah Workspace',
-    'Create Workspace' => 'Buat Workspace',
-    'Workspace name *' => 'Nama workspace *',
-    'e.g. Kopi Nusantara HQ' => 'mis. Pusat Kopi Nusantara',
-    'Back to workspaces' => 'Kembali ke daftar workspace',
-    'Save Changes' => 'Simpan Perubahan',
-
-    // Plan limits
-    'Workspace limit reached' => 'Batas workspace tercapai',
-    'Your current plan allows :limit workspace.' => 'Paket Anda saat ini memungkinkan :limit workspace.',
-    'Your plan allows :limit workspaces. :remaining still available.' => 'Paket Anda memungkinkan :limit workspace. Tersisa :remaining.',
     ':count remaining' => 'tersisa :count',
     ':used of :limit used' => ':used dari :limit terpakai',
-    'Upgrade your plan to create additional workspaces.' => 'Tingkatkan paket Anda untuk membuat workspace tambahan.',
-
-    // Empty / waiting states
-    'No Workspace Available' => 'Belum Ada Workspace',
-    'Waiting for invitation' => 'Menunggu undangan',
-    'You no longer have access to your previous workspace.' => 'Anda tidak lagi memiliki akses ke workspace sebelumnya.',
-    'Your account is still active — only the workspace membership was removed.' => 'Akun Anda masih aktif — hanya keanggotaan workspace yang dihapus.',
-
-    // Async states
-    'Creating workspace…' => 'Membuat workspace…',
-    'Opening…' => 'Membuka…',
+    'Add Workspace' => 'Tambah Workspace',
+    'Back to workspaces' => 'Kembali ke daftar workspace',
     'Closing…' => 'Menutup…',
-    'Updating…' => 'Memperbarui…',
-
-    // Notices
-    'The workspace URL stays the same so existing links keep working.' => 'URL workspace tetap sama sehingga tautan yang ada tetap berfungsi.',
+    'Create Workspace' => 'Buat Workspace',
+    'Creating workspace…' => 'Membuat workspace…',
     'Dismiss this notice' => 'Tutup pemberitahuan ini',
-
+    'No Workspace Available' => 'Tidak Ada Workspace Tersedia',
+    'Opening…' => 'Membuka…',
+    'Save Changes' => 'Simpan Perubahan',
+    'The workspace URL stays the same so existing links keep working.' => 'URL workspace tetap sama sehingga tautan yang ada tetap berfungsi.',
+    'Updating…' => 'Memperbarui…',
+    'Upgrade your plan to create additional workspaces.' => 'Tingkatkan paket Anda untuk membuat workspace tambahan.',
+    'Waiting for invitation' => 'Menunggu undangan',
+    'Workspace limit reached' => 'Batas workspace tercapai',
+    'Workspace name *' => 'Nama workspace *',
+    'You don\'t currently have access to any workspace.' => 'Anda saat ini tidak memiliki akses ke workspace mana pun.',
+    'You no longer have access to your previous workspace.' => 'Anda tidak lagi memiliki akses ke workspace sebelumnya.',
+    'Your Workspaces' => 'Workspace Anda',
+    'Your account is still active — only the workspace membership was removed.' => 'Akun Anda masih aktif — hanya keanggotaan workspace yang dihapus.',
+    'Your current plan allows :limit workspace.' => 'Paket Anda saat ini mengizinkan :limit workspace.',
+    'Your plan allows :limit workspaces. :remaining still available.' => 'Paket Anda mengizinkan :limit workspace. Tersisa :remaining.',
+    'e.g. Kopi Nusantara HQ' => 'mis. Pusat Kopi Nusantara',
 ];

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  sitemap.xml - Cultiv
+
+  DISINI. Dilayani langsung dari folder public/, tanpa route/controller Laravel.
+
+  Sengaja dikosongkan. Anda yang mengisinya.
+
+  Cara mengisi: satu blok <url> per halaman publik, TANPA query parameter.
+
+  <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+      <loc>https://cultiv.id/</loc>
+      <changefreq>weekly</changefreq>
+      <priority>1.0</priority>
+    </url>
+  </urlset>
+
+  Halaman yang BOLEH masuk: hanya route yang ada di config/seo.php pada
+  key 'indexable_routes' (saat ini: 'home').
+
+  Halaman yang TIDAK boleh masuk: /login, /register, /dashboard, /admin,
+  /profile, /settings, /billing, /products, /sales, /stock, /tenants.
+
+  Catatan: anchor di homepage seperti /#pricing, /#features, /#modules, /#faq
+  BUKAN URL terpisah. Masukkan domainnya satu kali saja; Google akan
+  menjumpainya sendiri sebagai bagian dari halaman yang sama.
+
+  Validasi setelah mengisi: https://validator.schema.org/
+
+  CATATAN TEKNIS: karakter dua tanda hubung tidak boleh muncul di dalam
+  komentar XML, itu membuat file tidak valid dan crawler menolaknya.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+</urlset>
