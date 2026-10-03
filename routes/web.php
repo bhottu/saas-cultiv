@@ -4,6 +4,7 @@ use App\Http\Controllers\BillingController;
 use App\Http\Controllers\FileController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\SitemapController;
 use App\Http\Controllers\ApiTokenController;
 use App\Http\Controllers\BusinessInvoicesController;
 use App\Http\Controllers\BrandsController;
@@ -28,6 +29,14 @@ use App\Http\Controllers\PosController;
 
 
 Route::get('/', fn () => view('welcome', ['plans' => \App\Models\Plan::active()->get()]))->name('home');
+
+// Sitemap for crawlers. Served by the application rather than as a static file in
+// public/, because a file there would be handed over by the web server before Laravel
+// ever sees the request — the route would look registered and never run. The public/
+// sitemap.xml placeholder was removed for exactly that reason.
+//
+// Deliberately outside every middleware group: a crawler has no session.
+Route::get('/sitemap.xml', SitemapController::class)->name('sitemap');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     // Tenant onboarding / switching (no tenant context required yet).

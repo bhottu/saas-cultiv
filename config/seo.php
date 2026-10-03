@@ -97,6 +97,27 @@ return [
     ],
 
     /*
+    | Sitemap contents.
+    |
+    | The NAMES of the routes a crawler may index — never a hand-written list of URLs.
+    | SitemapController re-checks every name against the live route table and drops
+    | anything carrying auth / verified / tenant / platform-admin middleware, so
+    | adding a private route here by mistake cannot leak it.
+    |
+    | Cultiv currently has exactly one public page. The rest of the 220 named routes
+    | need a signed-in user, and usually a workspace on top. That is not a gap in this
+    | file; it is what the application is.
+    |
+    | When a genuinely public page is added (a /pricing page, a public help article),
+    | add its route NAME here and the sitemap picks it up on its own.
+    */
+    'sitemap' => [
+        'routes' => [
+            'home',
+        ],
+    ],
+
+    /*
     | Set to '@handle' only once the account genuinely exists. A fabricated handle
     | makes Twitter attribute the card to whoever owns that name.
     */

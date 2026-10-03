@@ -376,42 +376,32 @@ class SeoTest extends TestCase
     |
     */
 
-    public function test_robots_txt_exists_and_is_deliberately_left_for_the_owner(): void
+    public function test_robots_txt_declares_the_production_sitemap(): void
     {
-        $path = public_path('robots.txt');
+        // robots.txt used to ship as a comment-only placeholder. It now carries real
+        // directives; SitemapTest owns the sitemap itself, this only checks the pointer.
+        $robots = (string) file_get_contents(public_path('robots.txt'));
 
-        $this->assertFileExists($path);
+        $this->assertStringContainsString('User-agent: *', $robots);
+        $this->assertStringContainsString('Sitemap: '.config('seo.url').'/sitemap.xml', $robots);
 
-        $contents = (string) file_get_contents($path);
-
-        // Ships with guidance rather than rules: the owner fills it in. What matters
-        // is that nothing is ACTIVE yet — the Disallow examples in the comment are
-        // instructions to copy, not rules being applied, so only uncommented lines
-        // are inspected.
-        $active = array_filter(
-            array_map('trim', explode("\n", $contents)),
-            fn (string $line) => $line !== '' && ! str_starts_with($line, '#')
-        );
-
-        $this->assertSame([], $active, 'robots.txt should ship with no active directives.');
-        $this->assertStringContainsString('robots.txt', $contents);
+        // The private areas are closed at this layer too, as a second line of defence
+        // behind the meta robots tags.
+        foreach (['/admin', '/tenants', '/products', '/login'] as $path) {
+            $this->assertStringContainsString('Disallow: '.$path, $robots);
+        }
     }
 
-    public function test_the_sitemap_is_well_formed_xml_and_lists_no_private_url(): void
+    public function test_the_sitemap_is_served_by_a_route_not_a_static_file(): void
     {
-        $path = public_path('sitemap.xml');
+        // SitemapTest covers the document itself. Here we only assert the wiring: a
+        // static public/sitemap.xml would be handed over by the web server before
+        // Laravel runs, leaving the route registered but unreachable.
+        $this->assertFileDoesNotExist(public_path('sitemap.xml'));
 
-        $this->assertFileExists($path);
-
-        $xml = (string) file_get_contents($path);
-
-        $this->assertNotFalse(simplexml_load_string($xml), 'sitemap.xml must be valid XML.');
-        $this->assertStringContainsString('urlset', $xml);
-
-        // Left empty on purpose, but it must never be shipped pointing at private areas.
-        foreach (['/dashboard', '/admin', '/login', '/register', '/products', '/sales'] as $private) {
-            $this->assertStringNotContainsString('<loc>https://cultiv.id'.$private, $xml);
-        }
+        $this->get('/sitemap.xml')
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/xml; charset=UTF-8');
     }
 
     public function test_the_open_graph_card_is_a_valid_1200x630_image_on_disk(): void

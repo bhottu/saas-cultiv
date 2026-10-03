@@ -15,7 +15,7 @@ return [
     'Add customer' => 'Add customer',
     'Add the first one' => 'Add the first one',
     'Back to customers' => 'Back to customers',
-    'Buyers of this workspace — a sale can also be a walk-in.' => 'Penjualan juga dapat dilakukan kepada pelanggan yang datang langsung.',
+    'Buyers of this workspace — a sale can also be a walk-in.' => 'Buyers of this workspace — a sale can also be a walk-in.',
     'Cancel' => 'Cancel',
     'Create customer' => 'Create customer',
     'Credit limit' => 'Credit limit',

@@ -13,6 +13,7 @@ return [
     'Add customer' => 'Tambah pelanggan',
     'Add the first one' => 'Tambah yang pertama',
     'Back to customers' => 'Kembali ke pelanggan',
+    'Buyers of this workspace — a sale can also be a walk-in.' => 'Penjualan juga dapat dilakukan kepada pelanggan yang datang langsung.',
     'Cancel' => 'Batal',
     'Create customer' => 'Buat pelanggan',
     'Credit limit' => 'Batas kredit',
