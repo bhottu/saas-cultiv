@@ -1,27 +1,6 @@
-# robots.txt — Cultiv
-#
-# File ini dilayani langsung oleh server dari folder public/, bukan lewat route
-# Laravel. Edit langsung file ini.
-#
-# CATATAN SOAL KEAMANAN
-# File ini adalah permintaan sopan kepada crawler, BUKAN pengaman. Yang
-# benar-benar mencegah data bisnis masuk ke Google adalah tag
-#   <meta name="robots" content="noindex, nofollow">
-# yang sudah dipasang di layouts/app.blade.php (seluruh halaman dashboard)
-# dan layouts/guest.blade.php (login/register), ditambah allow-list route di
-# config/seo.php yang menolak route private secara default.
-# Jangan bergantung pada file ini untuk melindungi data tenant.
-#
-# YANG TIDAK BOLEH DILAKUKAN DI SINI
-# Jangan Disallow /css, /js, /images atau /build. Crawler membutuhkan file
-# tersebut untuk merender dan memahami halaman; menutupnya hanya membuat situs
-# terlihat rusak, bukan aman.
-
 User-agent: *
 Allow: /
 
-# Halaman di balik login. Semuanya sudah membawa noindex lewat meta tag, tetapi
-# beberapa scraper mengabaikan meta tag, jadi daftar ini adalah lapisan kedua.
 Disallow: /admin
 Disallow: /api
 Disallow: /billing
@@ -48,9 +27,6 @@ Disallow: /warehouses
 Disallow: /audit-logs
 Disallow: /webhooks
 Disallow: /storage
-
-# Alur autentikasi. Tidak ada alasan bagi crawler untuk mengindeksnya, dan
-# halaman verifikasi email hanya relevan bagi satu orang.
 Disallow: /login
 Disallow: /register
 Disallow: /logout
@@ -59,6 +35,5 @@ Disallow: /reset-password
 Disallow: /verify-email
 Disallow: /confirm-password
 Disallow: /auth/
-
 Sitemap: https://cultiv.id/sitemap.xml
 
