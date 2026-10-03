@@ -77,7 +77,7 @@ class WorkspaceBrandingController extends Controller
             'logo_changed' => ($attributes['brand_logo_path'] ?? null) !== $previousLogo,
         ]);
 
-        return redirect()->route('profile.edit')->with('success', 'Brand identity saved.');
+        return redirect()->route('settings.index', ['tab' => 'branding'])->with('success', __('Brand identity saved.'));
     }
 
     /**

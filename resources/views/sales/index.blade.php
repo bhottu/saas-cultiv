@@ -76,7 +76,7 @@
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                     <option value="">{{ __('All channels') }}</option>
                     @foreach ($channels as $value => $label)
-                        <option value="{{ $value }}" @selected(($filters['sales_channel'] ?? '') === $value)>{{ __($label) }}</option>
+                        <option value="{{ $value }}" @selected(($filters['sales_channel'] ?? '') === $value)>{{ __('labels.channel.'.$label) }}</option>
                     @endforeach
                 </select>
             </div>
@@ -87,7 +87,7 @@
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                     <option value="">{{ __('All statuses') }}</option>
                     @foreach ($statuses as $status)
-                        <option value="{{ $status }}" @selected(($filters['status'] ?? '') === $status)>{{ __(ucfirst($status)) }}</option>
+                        <option value="{{ $status }}" @selected(($filters['status'] ?? '') === $status)>{{ __('labels.order.'.$status) }}</option>
                     @endforeach
                 </select>
             </div>
@@ -165,10 +165,10 @@
                             </td>
                             <td class="px-4 py-3">
                                 <span class="rounded-full px-2 py-0.5 text-xs {{ $statusTone($sale->status) }}">
-                                    {{ __(ucfirst($sale->status)) }}
+                                    {{ __('labels.order.'.$sale->status) }}
                                 </span>
                             </td>
-                            <td class="px-4 py-3">{{ __($channels[$sale->sales_channel] ?? ucfirst($sale->sales_channel)) }}</td>
+                            <td class="px-4 py-3">{{ __('labels.channel.'.($channels[$sale->sales_channel] ?? ucfirst($sale->sales_channel))) }}</td>
                             <td class="px-4 py-3">{{ $sale->createdBy?->name ?? '—' }}</td>
                             <td class="px-4 py-3">
                                 <div class="flex justify-end gap-3">

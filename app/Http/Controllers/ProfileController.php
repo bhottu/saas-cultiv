@@ -22,15 +22,8 @@ class ProfileController extends Controller
      */
     public function edit(Request $request): View
     {
-        $ctx = app('tenant.context');
-        $tenant = $ctx->tenant();
-
         return view('profile.edit', [
             'user' => $request->user(),
-            'brandTenant' => $tenant,
-            // `manage_settings` is the existing registry entry for workspace settings;
-            // the role table grants it to Owner and Admin only.
-            'canManageBranding' => $tenant !== null && $ctx->userCan('manage_settings'),
         ]);
     }
 

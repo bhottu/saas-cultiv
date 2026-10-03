@@ -72,7 +72,7 @@
             <div>
                 <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">{{ __('Order status') }}</div>
                 <span class="mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-medium {{ $statusTone($sale->status) }}">
-                    {{ __(ucfirst($sale->status)) }}
+                    {{ __('labels.order.'.$sale->status) }}
                 </span>
             </div>
 
@@ -90,7 +90,7 @@
             <div>
                 <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">{{ __('Sales channel') }}</div>
                 <div class="mt-1 text-sm font-medium text-gray-800">
-                    {{ __(config('business.sales.channels')[$sale->sales_channel] ?? ucfirst($sale->sales_channel)) }}
+                    {{ __('labels.channel.'.(config('business.sales.channels')[$sale->sales_channel] ?? ucfirst($sale->sales_channel))) }}
                 </div>
                 <div class="text-xs text-gray-500">{{ $sale->warehouse?->name ?? '—' }}</div>
             </div>
@@ -229,7 +229,7 @@
                         @forelse ($sale->payments as $payment)
                             <li class="flex items-center justify-between gap-2 py-2">
                                 <span>
-                                    <span class="font-medium text-gray-800">{{ __(config('business.sales.payment_methods')[$payment->method] ?? ucfirst($payment->method)) }}</span>
+                                    <span class="font-medium text-gray-800">{{ __('labels.payment.'.(config('business.sales.payment_methods')[$payment->method] ?? ucfirst($payment->method))) }}</span>
                                     <span class="block text-xs text-gray-500">
                                         {{ $payment->paid_at?->format('d M Y H:i') }}
                                         @if ($payment->reference) · {{ $payment->reference }} @endif

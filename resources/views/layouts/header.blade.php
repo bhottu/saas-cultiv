@@ -218,6 +218,9 @@
                             <x-dropdown-link :href="route('profile.edit')">
                                 {{ __('Profile') }}
                             </x-dropdown-link>
+                            <x-dropdown-link :href="route('settings.index')">
+                                {{ __('Settings') }}
+                            </x-dropdown-link>
                             <x-dropdown-link :href="route('tokens.index')">
                                 {{ __('API tokens') }}
                             </x-dropdown-link>

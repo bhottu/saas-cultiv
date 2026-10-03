@@ -9,9 +9,11 @@
             $remainingWorkspaces = $workspaceLimit === null ? null : max(0, $workspaceLimit - $ownedCount);
         @endphp
 
-        @if (session('success'))
-            <div class="rounded-lg bg-green-100 p-3 text-green-800">{{ session('success') }}</div>
-        @endif
+        {{-- An account with no workspace is bounced here by the tenant middleware,
+             which is the same bounce the dashboard route performs. Both destinations
+             need the banner, or the confirmation would silently vanish for the newest
+             users — exactly the ones who have not created a workspace yet. --}}
+        <x-flash-messages />
 
         {{--
             A revoked membership is NOT a broken account. Removing somebody from a team

@@ -39,6 +39,9 @@ return Application::configure(basePath: dirname(__DIR__))
         );
         $middleware->web(append: [
             \App\Http\Middleware\EnsureTenantContext::class,
+            // After the session is available, so $request->user() resolves and the
+            // stored language preference can be applied before any view renders.
+            \App\Http\Middleware\SetLocale::class,
         ]);
         $middleware->api(prepend: [
             \App\Http\Middleware\EnsureTenantContext::class,

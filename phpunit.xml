@@ -31,6 +31,14 @@
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
+        <!-- Cultiv One ships with Indonesian as the application default, but the bulk
+             of this suite asserts on rendered UI copy in English and exists to test
+             business rules, not translation. Pinning the test locale to English keeps
+             those assertions meaningful instead of silently rewriting dozens of
+             unrelated tests. Translation itself is covered on purpose in
+             SettingsLocalizationTest, which switches locales explicitly, and in
+             TranslationSyncTest, which drives both locales directly. -->
+        <env name="APP_LOCALE" value="en"/>
         <!-- The gateway client refuses to call the provider without credentials, so the
              test environment must present itself as a configured installation. These are
              fake values that only ever travel into Http::fake(). -->

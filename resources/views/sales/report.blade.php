@@ -183,7 +183,7 @@
                     <tbody class="divide-y divide-gray-100">
                         @forelse ($byChannel as $row)
                             <tr>
-                                <td class="px-4 py-3">{{ __(config('business.sales.channels')[$row->sales_channel] ?? ucfirst($row->sales_channel)) }}</td>
+                                <td class="px-4 py-3">{{ __('labels.channel.'.($row->sales_channel ? (config('business.sales.channels')[$row->sales_channel] ?? ucfirst($row->sales_channel)) : '')) }}</td>
                                 <td class="px-4 py-3 text-right">{{ (int) $row->orders }}</td>
                                 <td class="whitespace-nowrap px-4 py-3 text-right">{{ \App\Services\Money::format((int) $row->total) }}</td>
                             </tr>

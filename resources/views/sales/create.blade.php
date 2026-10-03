@@ -88,7 +88,7 @@
                     <select id="sales_channel" name="sales_channel"
                             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                         @foreach ($channels as $value => $label)
-                            <option value="{{ $value }}" @selected(old('sales_channel', $channelDefault) === $value)>{{ __($label) }}</option>
+                            <option value="{{ $value }}" @selected(old('sales_channel', $channelDefault) === $value)>{{ __('labels.channel.'.$label) }}</option>
                         @endforeach
                     </select>
                     <x-input-error :messages="$errors->get('sales_channel')" class="mt-2" />
@@ -295,7 +295,7 @@
                         <select id="payment_method" name="payment_method"
                                 class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                             @foreach ($paymentMethods as $value => $label)
-                                <option value="{{ $value }}" @selected(old('payment_method', $methodDefault) === $value)>{{ __($label) }}</option>
+                                <option value="{{ $value }}" @selected(old('payment_method', $methodDefault) === $value)>{{ __('labels.payment.'.$label) }}</option>
                             @endforeach
                         </select>
                         <x-input-error :messages="$errors->get('payment_method')" class="mt-2" />

@@ -217,6 +217,16 @@
             'href' => route('profile.edit'),
             'active' => request()->routeIs('profile.*'),
         ],
+        // Preferences hub. Profile above stays personal facts (name, email, password);
+        // everything configurable — language, workspace branding — lives here. Kept in
+        // the same group so it is one click from the account menu, and registered
+        // outside the `tenant` group so it also works with no workspace selected.
+        [
+            'label' => __('Settings'),
+            'icon' => 'cog',
+            'href' => route('settings.index'),
+            'active' => request()->routeIs('settings.*'),
+        ],
         [
             'label' => __('API Tokens'),
             'icon' => 'key',

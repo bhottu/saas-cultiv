@@ -91,7 +91,7 @@
                     <select id="refund_method" name="refund_method"
                             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                         @foreach ($paymentMethods as $value => $label)
-                            <option value="{{ $value }}" @selected(old('refund_method', $sale->payment_method) === $value)>{{ __($label) }}</option>
+                            <option value="{{ $value }}" @selected(old('refund_method', $sale->payment_method) === $value)>{{ __('labels.payment.'.$label) }}</option>
                         @endforeach
                     </select>
                     <x-input-error :messages="$errors->get('refund_method')" class="mt-2" />

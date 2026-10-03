@@ -325,7 +325,7 @@ class ModuleManager
             }
 
             $items[] = [
-                'label'  => __($manifest['name'] ?? $definition->name),
+                'label'  => __('labels.module.'.($manifest['name'] ?? $definition->name)),
                 'icon'   => $manifest['icon'] ?? $definition->icon ?? 'cube',
                 'href'   => route($routeName),
                 'active' => request()->routeIs($manifest['active'] ?? $this->activePattern($routeName)),

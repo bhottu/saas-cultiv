@@ -3,6 +3,7 @@
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\FileController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\ApiTokenController;
 use App\Http\Controllers\BusinessInvoicesController;
 use App\Http\Controllers\BrandsController;
@@ -211,6 +212,13 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    // Preferences hub. Outside the `tenant` group on purpose: language is an account
+    // preference and must be reachable before a workspace exists. The branding tab
+    // renders its own no-workspace state instead of the route refusing to load.
+    Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
+    Route::patch('/settings/language', [SettingsController::class, 'updateLanguage'])
+        ->name('settings.language.update');
 
     // API tokens remain user-owned, but entitlement checks require an active workspace.
     Route::middleware('tenant')->group(function () {

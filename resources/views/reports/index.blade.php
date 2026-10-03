@@ -15,16 +15,16 @@
     <div class="mx-auto max-w-7xl space-y-6 py-12 sm:px-6 lg:px-8">
         <div class="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
             @foreach ([
-                ['route' => 'reports.sales',     'title' => 'Sales Report',     'desc' => 'Revenue, discounts, refunds and net sales by product, category, brand, customer, channel and staff.'],
-                ['route' => 'reports.inventory', 'title' => 'Inventory Report', 'desc' => 'Stock value, low stock, incoming/outgoing units and every stock movement in the window.'],
-                ['route' => 'reports.purchases', 'title' => 'Purchase Report',  'desc' => 'Purchase value by supplier and product, with received vs outstanding orders.'],
-                ['route' => 'reports.customers', 'title' => 'Customer Report',  'desc' => 'Top customers, repeat purchase rate, new customers and average spend per order.'],
-                ['route' => 'reports.profit',    'title' => 'Profit Report',    'desc' => 'Revenue, COGS, gross profit, expenses and net profit with margins.'],
+                ['route' => 'reports.sales',     'title' => __('Sales Report'),     'desc' => __('Revenue, discounts, refunds and net sales by product, category, brand, customer, channel and staff.')],
+                ['route' => 'reports.inventory', 'title' => __('Inventory Report'), 'desc' => __('Stock value, low stock, incoming/outgoing units and every stock movement in the window.')],
+                ['route' => 'reports.purchases', 'title' => __('Purchase Report'),  'desc' => __('Purchase value by supplier and product, with received vs outstanding orders.')],
+                ['route' => 'reports.customers', 'title' => __('Customer Report'),  'desc' => __('Top customers, repeat purchase rate, new customers and average spend per order.')],
+                ['route' => 'reports.profit',    'title' => __('Profit Report'),    'desc' => __('Revenue, COGS, gross profit, expenses and net profit with margins.')],
             ] as $card)
                 <a href="{{ route($card['route']) }}"
                    class="block rounded-lg bg-white p-5 shadow transition hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
-                    <h3 class="font-semibold text-gray-900">{{ __($card['title']) }}</h3>
-                    <p class="mt-1 text-sm text-gray-500">{{ __($card['desc']) }}</p>
+                    <h3 class="font-semibold text-gray-900">{{ $card['title'] }}</h3>
+                    <p class="mt-1 text-sm text-gray-500">{{ $card['desc'] }}</p>
                     <span class="mt-3 inline-block text-sm font-medium text-indigo-600">{{ __('Open report') }} →</span>
                 </a>
             @endforeach

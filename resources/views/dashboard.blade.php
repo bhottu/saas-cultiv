@@ -25,9 +25,9 @@
     @endphp
 
     <div class="mx-auto max-w-7xl space-y-6 py-12 sm:px-6 lg:px-8">
-        @if (session('success'))
-            <div class="rounded-lg bg-green-100 p-3 text-green-800">{{ session('success') }}</div>
-        @endif
+        {{-- Where the verification redirect lands, so the "email confirmed" banner is
+             rendered here. Reads the same session flash every other action uses. --}}
+        <x-flash-messages />
 
         {{-- Invitations to other workspaces addressed to this user: Accept/Reject right here. --}}
         <x-pending-invitations :invitations="$pendingInvitations" />

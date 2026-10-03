@@ -131,7 +131,7 @@
                             </td>
                             <td class="px-4 py-3">{{ $sale->customer?->name ?? __('Walk-in Customer') }}</td>
                             <td class="whitespace-nowrap px-4 py-3">{{ $sale->sold_at?->format('d M Y H:i') }}</td>
-                            <td class="px-4 py-3">{{ __(ucfirst($sale->status)) }}</td>
+                            <td class="px-4 py-3">{{ __('labels.order.'.$sale->status) }}</td>
                             <td class="whitespace-nowrap px-4 py-3 text-right font-medium">{{ \App\Services\Money::format($sale->total) }}</td>
                         </tr>
                     @empty

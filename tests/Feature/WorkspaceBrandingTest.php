@@ -86,7 +86,7 @@ class WorkspaceBrandingTest extends TestCase
         $this->inWorkspace()->patch('/branding', [
             'brand_name' => 'Toko ABC',
             'brand_tagline' => 'Solusi inventory dan penjualan modern',
-        ])->assertRedirect(route('profile.edit'))->assertSessionHas('success');
+        ])->assertRedirect(route('settings.index', ['tab' => 'branding']))->assertSessionHas('success');
 
         $this->tenant->refresh();
 
@@ -150,7 +150,7 @@ class WorkspaceBrandingTest extends TestCase
 
         // `manage_settings` is the existing registry entry for workspace settings.
         $this->inWorkspace($admin)->patch('/branding', ['brand_name' => 'By Admin'])
-            ->assertRedirect(route('profile.edit'));
+            ->assertRedirect(route('settings.index', ['tab' => 'branding']));
         $this->assertSame('By Admin', $this->tenant->fresh()->brand_name);
 
         $this->inWorkspace($staff)->patch('/branding', ['brand_name' => 'By Staff'])
@@ -163,13 +163,16 @@ class WorkspaceBrandingTest extends TestCase
         $staff = $this->user('readonly-staff', 'Staff');
         $this->tenant->update(['brand_name' => 'Toko ABC']);
 
-        $html = $this->inWorkspace($staff)->get('/profile')->assertOk()->getContent();
+        $html = $this->inWorkspace($staff)->get(route('settings.index', ['tab' => 'branding']))->assertOk()->getContent();
 
         $this->assertStringContainsString('Toko ABC', $html);
         // No editable controls for somebody who cannot save.
         $this->assertStringNotContainsString('name="brand_name"', $html);
         $this->assertStringNotContainsString('name="brand_logo"', $html);
-        $this->assertStringContainsString('Only the workspace owner or an admin can change the branding.', $html);
+        $this->assertStringContainsString(
+            __('Only the workspace owner or an admin can change the branding.'),
+            $html
+        );
     }
 
     public function test_branding_cannot_be_saved_without_an_active_workspace(): void
@@ -199,7 +202,7 @@ class WorkspaceBrandingTest extends TestCase
         $logo = UploadedFile::fake()->image('logo.png', 256, 256);
 
         $this->inWorkspace()->patch('/branding', ['brand_logo' => $logo])
-            ->assertRedirect(route('profile.edit'));
+            ->assertRedirect(route('settings.index', ['tab' => 'branding']));
 
         $path = $this->tenant->fresh()->brand_logo_path;
 
@@ -241,7 +244,7 @@ class WorkspaceBrandingTest extends TestCase
         $path = $this->tenant->fresh()->brand_logo_path;
 
         $this->inWorkspace()->patch('/branding', ['remove_logo' => '1'])
-            ->assertRedirect(route('profile.edit'));
+            ->assertRedirect(route('settings.index', ['tab' => 'branding']));
 
         $this->assertNull($this->tenant->fresh()->brand_logo_path);
         Storage::disk('local')->assertMissing($path);
@@ -275,10 +278,10 @@ class WorkspaceBrandingTest extends TestCase
 
     public function test_the_brand_identity_form_is_hidden_without_a_workspace(): void
     {
-        $html = $this->actingAs($this->owner)->get('/profile')->assertOk()->getContent();
+        $html = $this->actingAs($this->owner)->get(route('settings.index', ['tab' => 'branding']))->assertOk()->getContent();
 
-        $this->assertStringContainsString('Brand Identity', $html);
-        $this->assertStringContainsString('Select or create a workspace first', $html);
+        $this->assertStringContainsString(__('Brand Identity'), $html);
+        $this->assertStringContainsString(__('Select or create a workspace first'), $html);
         $this->assertStringNotContainsString('name="brand_name"', $html);
     }
 }

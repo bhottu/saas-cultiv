@@ -83,11 +83,11 @@
                 <div>
                     <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">{{ __('Sales channel') }}</div>
                     <div class="mt-1 text-sm text-gray-800">
-                        {{ __(config('business.sales.channels')[$sale->sales_channel] ?? ucfirst($sale->sales_channel)) }}
+                        {{ __('labels.channel.'.(config('business.sales.channels')[$sale->sales_channel] ?? ucfirst($sale->sales_channel))) }}
                     </div>
                     <div class="mt-2 text-xs font-semibold uppercase tracking-wide text-gray-500">{{ __('Status') }}</div>
                     <div class="text-sm text-gray-800">
-                        {{ __(ucfirst($sale->status)) }} · {{ $paymentLabel($sale->payment_status) }}
+                        {{ __('labels.order.'.$sale->status) }} · {{ $paymentLabel($sale->payment_status) }}
                     </div>
                 </div>
 
@@ -184,7 +184,7 @@
                 <ul class="mt-2 space-y-1 text-sm text-gray-700">
                     @forelse ($sale->payments as $payment)
                         <li>
-                            {{ __(config('business.sales.payment_methods')[$payment->method] ?? ucfirst($payment->method)) }}
+                            {{ __('labels.payment.'.(config('business.sales.payment_methods')[$payment->method] ?? ucfirst($payment->method))) }}
                             — {{ $money($payment->amount) }}
                             <span class="text-gray-500">
                                 ({{ $payment->paid_at?->format('d M Y H:i') }}@if ($payment->reference) · {{ $payment->reference }}@endif)

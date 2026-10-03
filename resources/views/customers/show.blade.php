@@ -104,7 +104,7 @@
                             <td class="px-4 py-3 text-right">{{ (int) $sale->items->sum('quantity') }}</td>
                             <td class="px-4 py-3">
                                 <span class="rounded-full px-2 py-0.5 text-xs {{ $statusTone($sale->status) }}">
-                                    {{ __(ucfirst($sale->status)) }}
+                                    {{ __('labels.order.'.$sale->status) }}
                                 </span>
                             </td>
                             <td class="whitespace-nowrap px-4 py-3 text-right font-medium">{{ \App\Services\Money::format($sale->total) }}</td>
