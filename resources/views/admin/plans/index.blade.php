@@ -1,4 +1,4 @@
-<x-admin-shell :title="__('Plans')" :subtitle="__('Pricing and entitlements, read straight from the plans table.')">
+<x-admin-shell :title="__('Plans')" :subtitle="__('Pricing and entitlements, read straight from the plans table.')" :editable="true">
     <x-admin-table :paginator="null" :empty="__('No plans configured.')">
         <thead class="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
             <tr>
@@ -9,6 +9,7 @@
                 <th class="px-4 py-3">{{ __('Products') }}</th>
                 <th class="px-4 py-3">{{ __('Modules') }}</th>
                 <th class="px-4 py-3 text-right">{{ __('Workspaces on plan') }}</th>
+                <th class="px-4 py-3 text-right">{{ __('Actions') }}</th>
             </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
@@ -50,9 +51,15 @@
                         @endforelse
                     </td>
                     <td class="px-4 py-3 text-right">{{ number_format($row['workspaces']) }}</td>
+                    <td class="whitespace-nowrap px-4 py-3 text-right">
+                        <a href="{{ route('admin.plans.edit', $plan) }}"
+                           class="inline-flex items-center rounded-md bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100">
+                            {{ __('Edit') }}
+                        </a>
+                    </td>
                 </tr>
             @empty
-                <tr><td colspan="7" class="px-4 py-6 text-gray-500">{{ __('No plans configured.') }}</td></tr>
+                <tr><td colspan="8" class="px-4 py-6 text-gray-500">{{ __('No plans configured.') }}</td></tr>
             @endforelse
         </tbody>
     </x-admin-table>

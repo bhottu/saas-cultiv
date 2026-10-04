@@ -322,16 +322,190 @@ class PwaTest extends TestCase
     {
         $html = $this->asOwner()->get('/dashboard')->assertOk()->getContent();
 
+        // The install control stays hidden until the browser genuinely supports installing.
+        // That is now `canInstall` (a real beforeinstallprompt arrived) OR `showIosInstructions`
+        // (iOS, where there is no prompt and the entry explains Share → Add to Home Screen).
+        // Both start false, so the control still never appears as a dead button.
         $this->assertMatchesRegularExpression(
-            '/x-cloak[^>]*x-show="canInstall"/',
+            '/x-cloak[^>]*x-show="canInstall \|\| showIosInstructions"/',
             $html,
-            'The install control must stay hidden until an install prompt exists.'
+            'The install control must stay hidden until the browser can actually install.'
         );
+
+        // The iOS branch must never be a button: there is no API to invoke, so a clickable
+        // control there could do nothing.
+        $this->assertMatchesRegularExpression(
+            '/<button[^>]*x-show="canInstall"/',
+            $html,
+            'The Chromium install prompt must remain a real button.'
+        );
+        $this->assertStringNotContainsString(
+            '<button type="button" @click="install()" x-show="showIosInstructions"',
+            $html,
+            'iOS must never be given a button, because nothing can be triggered there.'
+        );
+
         $this->assertMatchesRegularExpression(
             '/x-cloak[^>]*x-show="supported"/',
             $html,
             'The fullscreen control must stay hidden until the API exists.'
         );
+    }
+
+    /**
+     * iOS has no programmatic install, so the app must say so rather than imply a prompt.
+     */
+    public function test_ios_is_told_how_to_install_instead_of_being_given_a_dead_button(): void
+    {
+        $pwa = (string) file_get_contents(base_path('resources/js/pwa.js'));
+        $header = (string) file_get_contents(resource_path('views/layouts/header.blade.php'));
+
+        // One component handles both platforms — no duplicated install logic.
+        $this->assertSame(
+            1,
+            substr_count($pwa, 'export function pwaInstall'),
+            'There must be exactly one install component.'
+        );
+        $this->assertSame(
+            1,
+            substr_count($header, 'x-data="pwaInstall"'),
+            'The header must instantiate the shared install component exactly once.'
+        );
+
+        $this->assertStringContainsString('function isIos()', $pwa);
+        $this->assertStringContainsString('showIosInstructions', $pwa);
+
+        // The instruction itself must be translated, not hardcoded into the template.
+        $this->assertMatchesRegularExpression(
+            "/__\('On iPhone and iPad[^\n]+'\)/",
+            $header,
+            'The iOS instruction must go through __() like every other string.'
+        );
+
+        // Platform detection must never, under any circumstance, fire the native prompt:
+        // only a real beforeinstallprompt may do that.
+        $this->assertStringContainsString("if (isIos())", $pwa);
+    }
+
+    public function test_the_landing_page_carries_a_floating_install_entry(): void
+    {
+        $html = $this->get('/')->assertOk()->getContent();
+
+        $this->assertStringContainsString('x-data="pwaInstall"', $html);
+        $this->assertStringContainsString(__('Install Cultiv'), $html);
+
+        // Anchored to the bottom of the viewport, above the sticky header (z-40).
+        $this->assertStringContainsString('fixed', $html);
+        $this->assertStringContainsString('bottom-0', $html);
+        $this->assertStringContainsString('z-50', $html);
+
+        // Sized to its content, never the full viewport width.
+        $this->assertStringContainsString('w-fit', $html);
+        $this->assertStringNotContainsString('inset-x-0 w-full', $html);
+
+        // Hidden while nothing is installable and while already installed.
+        $this->assertStringContainsString(
+            'x-show="!installed && (canInstall || showIosInstructions)"',
+            $html
+        );
+
+        // A real button that does something on every platform.
+        $this->assertStringContainsString('@click="activate()"', $html);
+        $this->assertStringContainsString('x-show="iosHelpOpen"', $html);
+
+        // Keyboard reachable with a visible focus ring.
+        $this->assertMatchesRegularExpression('/<button[^>]*focus-visible:ring-2/', $html);
+    }
+
+    public function test_the_install_surface_exists_exactly_once_per_page(): void
+    {
+        // The landing page has its floating control; the application shell has its own.
+        // Neither may register a second listener or a second piece of install state.
+        $landing = $this->get('/')->assertOk()->getContent();
+        $shell = $this->asOwner()->get('/dashboard')->assertOk()->getContent();
+
+        $this->assertSame(1, substr_count($landing, 'x-data="pwaInstall"'));
+        $this->assertSame(1, substr_count($shell, 'x-data="pwaInstall"'));
+
+        // And the shared component is what owns every listener.
+        $pwa = (string) file_get_contents(base_path('resources/js/pwa.js'));
+
+        $this->assertSame(1, substr_count($pwa, "addEventListener('beforeinstallprompt'"));
+        $this->assertSame(1, substr_count($pwa, "addEventListener('appinstalled'"));
+
+        // Exactly one service worker registration, and one manifest.
+        $this->assertSame(1, substr_count($pwa, "register('/sw.js'"));
+        $this->assertFileExists(public_path('manifest.json'));
+    }
+
+    /**
+     * Launching the installed app must open the dashboard.
+     *
+     * The manifest is the right place for this: start_url is what the OS uses when the
+     * user taps the installed icon. Doing it with a global redirect instead would drag
+     * ordinary web visitors to /dashboard as well, which is not wanted.
+     */
+    public function test_the_installed_app_launches_on_the_dashboard(): void
+    {
+        $manifest = $this->manifest();
+
+        $this->assertSame('/dashboard', $manifest['start_url']);
+
+        // scope must contain start_url, otherwise the launch is out of scope.
+        $this->assertStringStartsWith(
+            rtrim($manifest['scope'], '/').'/',
+            $manifest['start_url'],
+            'start_url falls outside the manifest scope, so the installed app could not launch it.'
+        );
+
+        $this->assertSame('/', $manifest['scope']);
+
+        // And the target is a real, reachable page inside the application.
+        $this->actingAs($this->owner)->withSession(['tenant_id' => $this->tenant->id])
+            ->get($manifest['start_url'])
+            ->assertOk();
+    }
+
+    public function test_the_manifest_icons_are_real_files_at_the_sizes_it_declares(): void
+    {
+        $manifest = $this->manifest();
+
+        $this->assertNotEmpty($manifest['icons'], 'The manifest declares no icons.');
+
+        foreach ($manifest['icons'] as $icon) {
+            $path = public_path(ltrim($icon['src'], '/'));
+
+            $this->assertFileExists($path, "{$icon['src']} does not exist — the install icon would 404.");
+            $this->assertGreaterThan(0, filesize($path));
+
+            if (str_ends_with($icon['src'], '.png')) {
+                // Read the IHDR width/height straight out of the PNG header rather than
+                // trusting the manifest to describe its own asset correctly.
+                $bytes = file_get_contents($path);
+
+                $this->assertSame(
+                    "\x89PNG\r\n\x1a\n",
+                    substr($bytes, 0, 8),
+                    "{$icon['src']} is not a valid PNG."
+                );
+
+                // unpack() with named keys returns an associative array, so the two
+                // values are read by name rather than destructured positionally.
+                $size = unpack('Nwidth/Nheight', substr($bytes, 16, 8));
+
+                $this->assertSame(
+                    $icon['sizes'],
+                    $size['width'].'x'.$size['height'],
+                    "{$icon['src']} does not match the size declared in the manifest."
+                );
+            }
+        }
+
+        // A maskable icon must be declared as maskable, and a 512px "any" icon is what
+        // Chromium requires for installability.
+        $sizes = array_column($manifest['icons'], 'sizes');
+        $this->assertContains('192x192', $sizes);
+        $this->assertContains('512x512', $sizes);
     }
 
     public function test_x_cloak_rule_exists_so_gated_controls_cannot_flash(): void

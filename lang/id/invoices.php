@@ -10,4 +10,5 @@
 
 return [
     'Business invoices' => 'Faktur bisnis',
+    'Invoices' => 'Tagihan',
 ];

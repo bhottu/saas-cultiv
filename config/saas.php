@@ -19,6 +19,51 @@ return [
         'api_calls'     => ['period' => 'month',   'fallback' => 1000],
     ],
 
+    /*
+    | Entitlement keys a Plan row may carry.
+    |
+    | The authoritative list of everything Plan::limit() (numeric ceilings) and
+    | Plan::allows() (on/off capabilities) can read. The admin plan editor validates
+    | submitted keys against this, so a typo is rejected or dropped instead of being
+    | written into a plan where nothing would ever read it — and so a new capability is
+    | editable from /admin/plans the moment it is added here.
+    |
+    | Existing plan rows are never migrated by this list; it only governs what may be
+    | EDITED. A plan created before a key existed simply does not have that key, and
+    | Plan::allows() reads a missing key as false.
+    */
+    'plan_entitlements' => [
+        // Numeric ceilings. A null value means "unlimited" and is meaningful, not absent.
+        'max_workspaces',
+        'max_users',
+        'max_products',
+        'max_customers',
+        'max_storage_mb',
+        'max_api_calls',
+
+        // Capability switches read through Plan::allows().
+        'basic_sales',
+        'basic_stock',
+        'basic_purchases',
+        'basic_reports',
+        'advanced_reports',
+        'advanced_permissions',
+        'advanced_analytics',
+        'api_access',
+        'audit_log',
+    ],
+
+    // Feature switches that remove a whole surface by not registering its routes.
+    // Read at route-registration time, so `php artisan optimize:clear` / route cache
+    // must be re-run after changing the env value.
+    'features' => [
+        // The tenant file manager (/files). Disabled at the routing layer, not by hiding
+        // links: the controller, model, table and storage disk all stay in place so the
+        // feature can be switched back on. Internal uploads that other features rely on —
+        // notably the workspace branding logo — use their own routes and are unaffected.
+        'files_manager' => env('FILES_MANAGER_ENABLED', false),
+    ],
+
     // Secure file uploads (§18/§19). Never trust the client filename/extension alone.
     'uploads' => [
         'disk' => env('SAAS_UPLOAD_DISK', env('FILESYSTEM_DISK', 'local')),

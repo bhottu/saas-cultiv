@@ -10,9 +10,8 @@
              none should be offered as a social preview. The page's own title comes
              from config('seo.route_titles'), keyed by route name. --}}
         <x-seo robots="noindex, nofollow" />
-        <meta name="theme-color" content="{{ config('seo.theme_color') }}">
-        <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
-        <link rel="alternate icon" type="image/png" sizes="64x64" href="{{ asset('favicon-64.png') }}">
+        <meta name="theme-color" content="{{ \App\Models\SeoSetting::config('theme_color') }}">
+        <x-favicon />
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">

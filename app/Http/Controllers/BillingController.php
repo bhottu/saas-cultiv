@@ -27,9 +27,21 @@ class BillingController extends Controller
         $tenant = $ctx->tenant();
         $subscription = $tenant->activeSubscription()->with('plan')->first();
 
+        // A platform administrator holds Business permanently, so the screen reports
+        // THAT plan rather than whatever subscription row happens to exist. The plan is
+        // resolved through Tenant::effectivePlan(), the same single rule that gates
+        // features and limits, so the label can never disagree with the behaviour.
+        $plan = $tenant->effectivePlan();
+
+        // Drives "Active Forever" instead of the ordinary status + renewal date, and is
+        // the reason the admin is never prompted to renew or upgrade.
+        $isPermanent = $tenant->hasPlatformAdmin();
+
         return view('billing.index', [
             'tenant' => $tenant,
             'subscription' => $subscription,
+            'plan' => $plan,
+            'isPermanent' => $isPermanent,
             'plans' => Plan::active()->get(),
             'pendingPayment' => $this->noticeFor($request, $tenant),
             'invoices' => $tenant->invoices()->latest()->take(20)->get(),

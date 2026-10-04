@@ -22,6 +22,13 @@ return [
     'Included in :plans plans.' => 'Termasuk dalam paket :plans.',
     'Insights' => 'Wawasan',
     'Install Cultiv One' => 'Pasang Cultiv One',
+
+    'Reset' => 'Atur ulang',
+    'Install Cultiv' => 'Pasang Cultiv',
+    'Open the Share menu in the browser, then choose "Add to Home Screen" to install Cultiv.' => 'Buka menu Bagikan di browser, lalu pilih "Tambahkan ke Layar Utama" untuk memasang Cultiv.',
+
+    // iOS tidak menyediakan API pemasangan, jadi kalimat ini adalah petunjuk, bukan tombol.
+    'On iPhone and iPad, tap the Share button in the browser, then choose "Add to Home Screen".' => 'Di iPhone dan iPad, tekan tombol Bagikan di browser, lalu pilih "Tambahkan ke Layar Utama".',
     'Invitation pending — choose Accept or Reject to respond.' => 'Ada undangan yang menunggu — pilih Terima atau Tolak untuk merespons.',
     'Main navigation' => 'Navigasi utama',
     'Manage workspaces' => 'Kelola workspace',
@@ -33,6 +40,7 @@ return [
     'Pending Invitations' => 'Undangan Tertunda',
     'Platform' => 'Platform',
     'Point the camera at the barcode on the product.' => 'Arahkan kamera ke barcode pada produk.',
+    'Purchasing' => 'Pembelian',
     'Read only' => 'Hanya baca',
     'Reject' => 'Tolak',
     'Rejecting…' => 'Menolak…',

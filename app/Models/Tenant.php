@@ -89,6 +89,47 @@ class Tenant extends Model
             ->latestOfMany();
     }
 
+    /**
+     * Whether this workspace is governed by a platform administrator.
+     *
+     * A membership with is_platform_admin = true is the whole test — it is the same
+     * flag EnsurePlatformAdmin gates the /admin panel on, so "admin" means exactly one
+     * thing across the application rather than a second definition invented here.
+     *
+     * Only ACTIVE memberships count: a removed member must not keep granting a plan.
+     */
+    public function hasPlatformAdmin(): bool
+    {
+        return $this->memberships()
+            ->where('status', TenantUser::STATUS_ACTIVE)
+            ->whereHas('user', fn ($query) => $query->where('is_platform_admin', true))
+            ->exists();
+    }
+
+    /**
+     * The plan that governs this workspace's entitlements.
+     *
+     * This is the ONE place the rule lives. Feature gating (UsageService, ModuleManager,
+     * the plan.feature middleware) and the limit checks all resolve through it, so a
+     * platform admin holding Business permanently is enforced everywhere at once
+     * instead of being re-implemented at each call site.
+     *
+     * `activeSubscription` is left untouched on purpose: it stays the raw, truthful
+     * record of what was actually purchased, which is what the billing screen shows.
+     */
+    public function effectivePlan(): ?Plan
+    {
+        if ($this->hasPlatformAdmin()) {
+            // Business is the top of the catalogue, so it is the permanent plan. Looked
+            // up by slug because that is the identifier the rest of the billing flow
+            // uses, and a catalogue with no Business row simply falls through to the
+            // subscription below rather than erroring.
+            return Plan::where('slug', 'business')->first() ?? $this->activeSubscription?->plan;
+        }
+
+        return $this->activeSubscription?->plan;
+    }
+
     public function seatCount(): int
     {
         return $this->memberships()->where('status', TenantUser::STATUS_ACTIVE)->count();

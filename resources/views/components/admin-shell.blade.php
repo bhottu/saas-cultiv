@@ -1,10 +1,15 @@
-@props(['title', 'subtitle' => null])
+@props(['title', 'subtitle' => null, 'editable' => false])
 
 {{--
     Shared admin page frame. Every /admin screen uses this so the sidebar, spacing
     and mobile behaviour are identical, and the Cultiv One design system is reused
-    rather than reinvented. Read-only note is deliberate: admins monitor, they do
-    not edit tenant business records from here.
+    rather than reinvented.
+
+    Most admin screens monitor tenant business records and are genuinely read-only, so
+    they carry that badge by default. The screens that edit PLATFORM configuration
+    instead of tenant data (plans, SEO) pass :editable="true", which replaces the badge
+    with a hint that changes apply site-wide — the distinction that actually matters here
+    is "am I editing my workspace or the whole platform", not "can I type in this form".
 --}}
 <x-app-layout>
     <x-slot name="header">
@@ -15,8 +20,8 @@
                     <p class="truncate text-sm text-gray-500">{{ $subtitle }}</p>
                 @endif
             </div>
-            <span class="shrink-0 rounded-full bg-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700">
-                {{ __('Read only') }}
+            <span class="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium {{ $editable ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-700' }}">
+                {{ $editable ? __('Applies site-wide') : __('Read only') }}
             </span>
         </div>
     </x-slot>

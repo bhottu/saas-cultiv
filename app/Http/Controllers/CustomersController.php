@@ -7,6 +7,8 @@ use App\Services\AuditLogger;
 use App\Services\BusinessAuthorization;
 use App\Services\BusinessUsageService;
 use App\Services\Money;
+use App\Services\VCardExporter;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -21,9 +23,127 @@ class CustomersController extends Controller
     {
         $this->auth->authorize('customers.view');
 
-        $tenant = $request->user()->currentTenant;
+        $customers = $this->filtered($request)->latest('created_at')->paginate(50);
 
-        $query = Customer::where('tenant_id', $tenant->id);
+        return view('customers.index', [
+            'customers' => $customers,
+            'search' => $request->string('search')->toString(),
+            'active_only' => $request->boolean('active_only'),
+            // The export links replay exactly the filters on screen, so the downloaded
+            // file and the visible list can never disagree about which customers are in
+            // scope. Built here rather than in Blade so "the current filter" has one
+            // definition.
+            'exportFilters' => array_filter([
+                'search' => $request->string('search')->toString(),
+                'active_only' => $request->boolean('active_only') ? 1 : null,
+                'show_inactive' => $request->boolean('show_inactive') ? 1 : null,
+            ], fn ($value) => $value !== null && $value !== ''),
+        ]);
+    }
+
+    /**
+     * Contact export: one file holding every customer in scope.
+     *
+     * The query is the SAME filtered() the list uses, minus the pagination. That is the
+     * whole point — exporting the 50 rows currently on screen would silently drop the
+     * other 50 of a workspace with 100 customers, so the page count would never reach
+     * the file.
+     *
+     * `format` picks between the two targets described in the UI: `vcf` (default) for a
+     * phone's Contacts app, `csv` for Excel / Sheets / a CRM import. An unknown value
+     * falls back to vcf rather than erroring, so a hand-edited URL still downloads
+     * something the importer can read.
+     */
+    public function export(Request $request, VCardExporter $exporter)
+    {
+        // The same permission as reading the list: this is the same customer data in a
+        // different file format. No new permission is invented for it.
+        $this->auth->authorize('customers.view');
+
+        $format = strtolower((string) $request->query('format', 'vcf'));
+        $customers = $this->filtered($request)->orderBy('name')->get();
+
+        // Nothing to export is a normal outcome, not an error — and an empty file would
+        // download as 0 bytes and fail silently at the importer.
+        if ($customers->isEmpty()) {
+            return redirect()->route('customers.index', $request->except(['page', 'format']))
+                ->with('status', ['type' => 'error', 'message' => __('No customers to export.')]);
+        }
+
+        AuditLogger::log('customer.exported', null, [
+            'format' => $format,
+            'count' => $customers->count(),
+        ]);
+
+        return $format === 'csv'
+            ? $this->streamCsv($customers)
+            : $this->streamVcf($exporter, $customers);
+    }
+
+    /** streamDownload mirrors the existing CSV report export. */
+    private function streamVcf(VCardExporter $exporter, mixed $customers)
+    {
+        return response()->streamDownload(
+            fn () => print($exporter->render($customers)),
+            'customers.vcf',
+            [
+                'Content-Type' => 'text/vcard; charset=utf-8',
+                // Naming the type text/vcard is what tells iOS and Android to hand the
+                // file to the Contacts app instead of previewing it as plain text.
+                'Content-Disposition' => 'attachment; filename="customers.vcf"',
+            ]
+        );
+    }
+
+    /**
+     * The same rows as the vCard, as a spreadsheet-friendly CSV.
+     *
+     * Rows are written with fputcsv, never by string concatenation: that is what
+     * correctly quotes a name containing a comma, a double quote or a newline, which a
+     * hand-built line would turn into a corrupt file. A BOM is emitted first so Excel
+     * opens UTF-8 (Indonesian names are full of non-ASCII characters) without mangling
+     * them.
+     */
+    private function streamCsv(mixed $customers)
+    {
+        return response()->streamDownload(function () use ($customers) {
+            $handle = fopen('php://output', 'w');
+
+            // UTF-8 BOM so Excel detects the encoding.
+            echo "\xEF\xBB\xBF";
+
+            fputcsv($handle, [
+                __('Name'), __('Phone'), __('Email'), __('Address'), __('Notes'),
+            ]);
+
+            foreach ($customers as $customer) {
+                // Empty string, never null: a blank cell is a blank cell. fputcsv
+                // quotes these correctly on its own.
+                fputcsv($handle, [
+                    (string) ($customer->name ?? ''),
+                    (string) ($customer->phone ?? ''),
+                    (string) ($customer->email ?? ''),
+                    (string) ($customer->address ?? ''),
+                    (string) ($customer->notes ?? ''),
+                ]);
+            }
+
+            fclose($handle);
+        }, 'customers.csv', [
+            'Content-Type' => 'text/csv; charset=utf-8',
+            'Content-Disposition' => 'attachment; filename="customers.csv"',
+        ]);
+    }
+
+    /**
+     * The customers the current request is asking for, before pagination.
+     *
+     * Shared with index() so the filter on screen and the filter applied to the export
+     * cannot drift apart — the classic bug where an export quietly ignores the search box.
+     */
+    private function filtered(Request $request): Builder
+    {
+        $query = Customer::where('tenant_id', $request->user()->currentTenant->id);
 
         if ($request->filled('search')) {
             $term = $request->string('search')->toString();
@@ -42,13 +162,7 @@ class CustomersController extends Controller
             $query->where('is_active', false);
         }
 
-        $customers = $query->latest('created_at')->paginate(50);
-
-        return view('customers.index', [
-            'customers' => $customers,
-            'search' => $request->string('search')->toString(),
-            'active_only' => $request->boolean('active_only'),
-        ]);
+        return $query;
     }
 
     public function create()

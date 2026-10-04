@@ -38,6 +38,11 @@
         // Heroicons "document-chart-bar" artwork under the navigation's legacy
         // `document-report` key (heroicons v2 dropped the original file).
         'document-report' => 'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25M9 16.5v.75m3-3v3M15 12v5.25m-4.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z',
+// Heroicons outline "globe-alt" — SEO settings in the admin nav.
+        // NOTE: this component renders NOTHING for an unknown key (there is no
+        // @default branch), so a nav entry pointing at a missing icon shows as an
+        // invisible gap rather than a broken glyph — add the key here first.
+        'globe' => 'M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253m-18.432 0A17.919 17.919 0 0 1 3 12c0-1.056.136-2.077.392-3.018M21 12c0 2.51-.846 4.832-2.256 6.693m-14.488 0A11.99 11.99 0 0 1 3 12c0-2.51.846-4.832 2.256-6.693',
     ];
 @endphp
 

@@ -272,7 +272,7 @@ class ModuleManager
             return null;
         }
 
-        return $tenant->activeSubscription?->plan
+        return $tenant->effectivePlan()
             ?? Plan::query()->where('is_free_tier', true)->orderBy('sort_order')->first();
     }
 

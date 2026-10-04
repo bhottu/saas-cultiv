@@ -9,7 +9,7 @@
 */
 
 return [
-    'Billing' => 'Tagihan',
+    'Subscription' => 'Langganan',
     'Cancel & create new' => 'Batalkan & buat baru',
     'Continue payment' => 'Lanjutkan pembayaran',
     'Payment pending' => 'Pembayaran tertunda',

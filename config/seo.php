@@ -58,7 +58,7 @@ return [
         'stock.index' => 'Stock',
         'stock.movements' => 'Stock movements',
         'stock.low' => 'Low stock',
-        'billing.index' => 'Billing',
+        'billing.index' => 'Subscription',
         'customers.index' => 'Customers',
         'suppliers.index' => 'Suppliers',
         'categories.index' => 'Categories',
@@ -76,6 +76,8 @@ return [
         'tokens.index' => 'API tokens',
         'tenants.index' => 'Your workspaces',
         'admin.dashboard' => 'Admin',
+        'admin.seo.edit' => 'SEO Settings',
+        'admin.plans.edit' => 'Edit plan',
     ],
 
     // Paths are relative to the public disk root; absolute URLs are built from `url`.

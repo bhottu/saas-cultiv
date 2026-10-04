@@ -248,7 +248,10 @@ class TranslationSyncTest extends TestCase
             'Indonesian looks like a pass-through copy of English rather than a translation.'
         );
 
-        foreach (['Settings', 'Language', 'Security', 'Team', 'Billing'] as $key) {
+        // 'Subscription' replaces 'Billing': the plan/subscription screen was renamed, so the
+        // Indonesian wording changed from "Tagihan" to "Langganan" with it. The /billing
+        // route is unchanged; only the wording moved.
+        foreach (['Settings', 'Language', 'Security', 'Team', 'Subscription'] as $key) {
             $this->assertNotSame(
                 $en[$key],
                 $id[$key],

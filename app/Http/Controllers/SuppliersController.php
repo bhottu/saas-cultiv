@@ -18,18 +18,13 @@ class SuppliersController extends Controller
 
         $tenant = $request->user()->currentTenant;
 
-        $query = Supplier::where('tenant_id', $tenant->id);
+        $query = Supplier::where('tenant_id', $tenant->id)
+            ->search($request->string('search')->toString());
 
-        if ($request->filled('search')) {
-            $term = $request->string('search')->toString();
-            $query->where(function ($q) use ($term) {
-                $q->where('name', 'like', "%{$term}%")
-                    ->orWhere('phone', 'like', "%{$term}%")
-                    ->orWhere('email', 'like', "%{$term}%");
-            });
-        }
-
-        $suppliers = $query->latest('created_at')->paginate(50);
+        // withQueryString() so the pager keeps the active search. Without it, page 2
+        // silently dropped the keyword and showed the unfiltered list from the top —
+        // the classic "pagination ignores my filter" bug.
+        $suppliers = $query->latest('created_at')->paginate(50)->withQueryString();
 
         return view('suppliers.index', [
             'suppliers' => $suppliers,

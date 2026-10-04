@@ -17,6 +17,7 @@
         ['label' => __('Subscriptions'), 'icon' => 'chart-bar', 'href' => route('admin.subscriptions.index'), 'active' => request()->routeIs('admin.subscriptions.*')],
         ['label' => __('Payments'), 'icon' => 'credit-card', 'href' => route('admin.payments.index'), 'active' => request()->routeIs('admin.payments.*')],
         ['label' => __('Plans'), 'icon' => 'tag', 'href' => route('admin.plans.index'), 'active' => request()->routeIs('admin.plans.*')],
+        ['label' => __('SEO'), 'icon' => 'globe', 'href' => route('admin.seo.edit'), 'active' => request()->routeIs('admin.seo.*')],
         ['label' => __('Audit Logs'), 'icon' => 'shield-check', 'href' => route('admin.audit-logs.index'), 'active' => request()->routeIs('admin.audit-logs.*')],
     ];
 @endphp

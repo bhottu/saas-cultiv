@@ -113,11 +113,29 @@ class StockController extends Controller
 
         abort_unless($product->tenant_id === $tenant->id && $warehouse->tenant_id === $tenant->id, 404);
 
+        // "in" adds stock, "out" reduces it. The outcome is announced differently in each
+        // direction, so the wording is chosen here once and used by every branch below —
+        // the HTML redirect and the JSON response cannot drift apart.
+        $reducing = $validated['direction'] === 'out';
+
+        $successMessage = $reducing
+            ? __('Stock reduced successfully.')
+            : __('Stock added successfully.');
+
+        $failureMessage = $reducing
+            ? __('Failed to reduce stock.')
+            : __('Failed to add stock.');
+
+        // Returned for the HTML flow; JSON callers get the same outcome as a status code.
+        $fail = fn (string $reason) => $request->expectsJson()
+            ? response()->json(['message' => $failureMessage.' '.$reason], 422)
+            : back()->withInput()->with('status', ['type' => 'error', 'message' => $failureMessage.' '.$reason]);
+
         if (! $product->track_inventory) {
-            return back()->with('status', ['type' => 'error', 'message' => 'This product does not track inventory.']);
+            return $fail(__('This product does not track inventory.'));
         }
 
-        $signedQuantity = $validated['direction'] === 'out'
+        $signedQuantity = $reducing
             ? -1 * (int) $validated['quantity']
             : (int) $validated['quantity'];
 
@@ -132,11 +150,9 @@ class StockController extends Controller
                 $validated['notes'] ?? null,
             );
         } catch (InvalidArgumentException $exception) {
-            if ($request->expectsJson()) {
-                return response()->json(['message' => $exception->getMessage()], 422);
-            }
-
-            return back()->withInput()->with('status', ['type' => 'error', 'message' => $exception->getMessage()]);
+            // InventoryService raised BEFORE writing anything, so no movement exists and
+            // no success message can be shown. The reason is surfaced rather than swallowed.
+            return $fail($exception->getMessage());
         }
 
         $balance = (int) StockBalance::withoutGlobalScopes()
@@ -153,17 +169,18 @@ class StockController extends Controller
             'reason' => $validated['reason'],
         ]);
 
+        $message = $successMessage.' '.__('New balance: :balance.', [
+            'balance' => $balance.' '.$product->unit,
+        ]);
+
         if ($request->expectsJson()) {
             return response()->json([
-                'message' => 'Stock adjusted.',
+                'message' => $message,
                 'movement_id' => $movement->id,
                 'balance' => $balance,
             ]);
         }
 
-        return back()->with('status', [
-            'type' => 'success',
-            'message' => "Stock adjusted. New balance: {$balance}.",
-        ]);
+        return back()->with('status', ['type' => 'success', 'message' => $message]);
     }
 }

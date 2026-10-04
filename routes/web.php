@@ -5,6 +5,7 @@ use App\Http\Controllers\FileController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SitemapController;
+use App\Http\Controllers\SeoAssetController;
 use App\Http\Controllers\ApiTokenController;
 use App\Http\Controllers\BusinessInvoicesController;
 use App\Http\Controllers\BrandsController;
@@ -12,6 +13,7 @@ use App\Http\Controllers\CategoriesController;
 use App\Http\Controllers\CustomersController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExpensesController;
+use App\Http\Controllers\ExpenseCategoriesController;
 use App\Http\Controllers\ProductsController;
 use App\Http\Controllers\PurchasesController;
 use App\Http\Controllers\ReportsController;
@@ -38,6 +40,16 @@ Route::get('/', fn () => view('welcome', ['plans' => \App\Models\Plan::active()-
 // Deliberately outside every middleware group: a crawler has no session.
 Route::get('/sitemap.xml', SitemapController::class)->name('sitemap');
 
+// The favicon and og:image uploaded from /admin/seo. Public for the same reason the
+// sitemap is: a crawler and a chat-app scraper both fetch them without a session. This
+// route only serves paths that are actually referenced by the current settings, so it is
+// not a way to read tenant uploads.
+// The {file} pattern allows a slash because the stored path is nested (seo/xxxx.png);
+// a bare {file} would generate the right URL but 404 on it.
+Route::get('/seo-assets/{file}', SeoAssetController::class)
+    ->where('file', '.*')
+    ->name('seo.asset');
+
 Route::middleware(['auth', 'verified'])->group(function () {
     // Tenant onboarding / switching (no tenant context required yet).
     Route::get('/tenants', [TenantController::class, 'index'])->name('tenants.index');
@@ -61,13 +73,26 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('tenant')->group(function () {
         Route::get('/dashboard', DashboardController::class)->name('dashboard');
 
-        // Files (uploads rate-limited strictly; downloads/views share tenant scope).
-        Route::middleware('throttle:uploads')->group(function () {
-            Route::post('/files', [FileController::class, 'store'])->name('files.store');
-        });
-        Route::get('/files', [FileController::class, 'index'])->name('files.index');
-        Route::get('/files/{file}/download', [FileController::class, 'download'])->name('files.download');
-        Route::delete('/files/{file}', [FileController::class, 'destroy'])->name('files.destroy');
+        // Files — the tenant file manager (/files and its upload/download/delete children).
+        //
+        // DISABLED by default. The flag gates route REGISTRATION, which is the protection
+        // that matters: with the routes unregistered, /files, /files/{id}/download and the
+        // upload/delete endpoints all answer 404 no matter what the client sends, so there
+        // is no frontend-only hiding and no way to reach the controller directly. FileController,
+        // FileEntry, the `files` table and the storage disk are all left in place.
+        //
+        // Scope check before disabling: this is ONLY the file manager. Branding logo upload
+        // goes through `branding.update` -> WorkspaceBrandingController and serves from
+        // `branding.logo`, neither of which is registered here, so that feature keeps
+        // working. Set FILES_MANAGER_ENABLED=true to bring the whole surface back.
+        if (config('saas.features.files_manager')) {
+            Route::middleware('throttle:uploads')->group(function () {
+                Route::post('/files', [FileController::class, 'store'])->name('files.store');
+            });
+            Route::get('/files', [FileController::class, 'index'])->name('files.index');
+            Route::get('/files/{file}/download', [FileController::class, 'download'])->name('files.download');
+            Route::delete('/files/{file}', [FileController::class, 'destroy'])->name('files.destroy');
+        }
 
         // Team management (invite/roles/remove/restore).
         Route::get('/team', [TeamController::class, 'index'])->name('team.index');
@@ -120,6 +145,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::resource('categories', CategoriesController::class)->except(['show']);
         Route::resource('customers', CustomersController::class)->except(['show']);
         Route::get('/customers/{customer}', [CustomersController::class, 'show'])->name('customers.show');
+        // Contact export. Registered AFTER the resource on purpose: `customers/{customer}`
+        // would otherwise match "export" as a customer id and 404 on the real export.
+        Route::get('/customers-export', [CustomersController::class, 'export'])->name('customers.export');
         Route::resource('suppliers', SuppliersController::class)->except(['show']);
         Route::get('/suppliers/{supplier}', [SuppliersController::class, 'show'])->name('suppliers.show');
         Route::resource('purchases', PurchasesController::class)->only(['index', 'create', 'store', 'show', 'edit', 'update', 'destroy']);
@@ -170,6 +198,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Warehouse, purchasing, expense and business-invoice modules.
         Route::resource('warehouses', WarehousesController::class);
         Route::resource('expenses', ExpensesController::class);
+
+        // Expense categories. The `expense_categories` table, model and the FK on
+        // `expenses` have existed since the business-finance migration, but nothing could
+        // ever create a row — so the Category dropdown on the expense form could only ever
+        // be empty, with no way for a user to change that. This is the missing management
+        // surface. Kept as its own resource on purpose; see ExpenseCategoriesController for
+        // why these must never be merged with the product `categories`.
+        // `except(['show'])`: this resource has no detail page — a category is two fields, and
+// the list already shows everything about it. Leaving the generated `show` route in
+// place would point at a controller method that does not exist and answer 500.
+// `parameters`: keeps the binding name camelCase so it matches the typed controller
+// arguments, the way `products.index` binds `Product $product`.
+Route::resource('expense-categories', ExpenseCategoriesController::class)
+            ->parameters(['expense-categories' => 'expenseCategory'])
+            ->except(['show']);
         Route::get('/business-invoices', [BusinessInvoicesController::class, 'index'])->name('business-invoices.index');
         Route::get('/business-invoices/{invoice}', [BusinessInvoicesController::class, 'show'])->name('business-invoices.show');
         Route::post('/business-invoices/{invoice}/payments', [BusinessInvoicesController::class, 'pay'])->name('business-invoices.pay');
@@ -214,6 +257,12 @@ Route::middleware(['auth', 'verified', 'platform.admin'])->prefix('admin')->grou
     Route::get('/subscriptions', [\App\Http\Controllers\Admin\SubscriptionController::class, 'index'])->name('admin.subscriptions.index');
     Route::get('/payments', [\App\Http\Controllers\Admin\PaymentController::class, 'index'])->name('admin.payments.index');
     Route::get('/plans', [\App\Http\Controllers\Admin\PlanController::class, 'index'])->name('admin.plans.index');
+    Route::get('/plans/{plan}/edit', [\App\Http\Controllers\Admin\PlanController::class, 'edit'])->name('admin.plans.edit');
+    Route::put('/plans/{plan}', [\App\Http\Controllers\Admin\PlanController::class, 'update'])->name('admin.plans.update');
+    // Platform-wide SEO. The slug-free path keeps it from ever being confused with the
+    // plan resource above.
+    Route::get('/seo', [\App\Http\Controllers\Admin\SeoController::class, 'edit'])->name('admin.seo.edit');
+    Route::put('/seo', [\App\Http\Controllers\Admin\SeoController::class, 'update'])->name('admin.seo.update');
     Route::get('/audit-logs', [\App\Http\Controllers\Admin\AuditLogController::class, 'index'])->name('admin.audit-logs.index');
 });
 

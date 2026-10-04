@@ -41,22 +41,28 @@
 
 {{-- Open Graph. Every URL here is absolute; relative og:image and og:url are ignored
      by most social scrapers, which is why a shared link would otherwise preview
-     without a picture. --}}
+     without a picture.
+
+     og:title / og:description / og:image are separate from <title>/<meta description>
+     because they are frequently written on purpose: a social card usually needs a
+     shorter, benefit-led line than the one shown in the browser tab. Seo fills them
+     with the page title/description whenever an administrator has not set their own,
+     so no tag is ever rendered blank. --}}
 <meta property="og:type" content="{{ $seo['type'] }}">
-<meta property="og:title" content="{{ $seo['title'] }}">
-<meta property="og:description" content="{{ $seo['description'] }}">
+<meta property="og:title" content="{{ $seo['og_title'] }}">
+<meta property="og:description" content="{{ $seo['og_description'] }}">
 <meta property="og:url" content="{{ $seo['url'] }}">
 <meta property="og:image" content="{{ $seo['image'] }}">
-<meta property="og:site_name" content="{{ $seo['site_name'] }}">
+<meta property="og:site_name" content="{{ $seo['og_site_name'] }}">
 <meta property="og:locale" content="{{ $seo['locale'] }}">
-<meta name="twitter:image:alt" content="{{ $seo['title'] }}">
+<meta name="twitter:image:alt" content="{{ $seo['twitter_image_alt'] ?? $seo['og_title'] }}">
 
 {{-- Twitter / X card. Without a twitter:card, X shows a bare link instead of the
      large image preview that this markup is here to produce. --}}
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="{{ $seo['title'] }}">
-<meta name="twitter:description" content="{{ $seo['description'] }}">
-<meta name="twitter:image" content="{{ $seo['image'] }}">
+<meta name="twitter:card" content="{{ $seo['twitter_card'] }}">
+<meta name="twitter:title" content="{{ $seo['twitter_title'] }}">
+<meta name="twitter:description" content="{{ $seo['twitter_description'] }}">
+<meta name="twitter:image" content="{{ $seo['twitter_image'] }}">
 @if ($seo['twitter_handle'])
     {{-- Only rendered when a real account is configured. A fabricated handle would
          hand the card to whoever owns that name. --}}

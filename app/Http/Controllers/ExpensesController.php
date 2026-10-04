@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\AuditLogger;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
+use App\Models\Tenant;
 use App\Services\BusinessAuthorization;
 use App\Services\Money;
 use Illuminate\Http\Request;
@@ -47,10 +48,29 @@ class ExpensesController extends Controller
 
         return view('expenses.form', [
             'expense' => new Expense(),
-            'categories' => ExpenseCategory::where('tenant_id', $tenant->id)->orderBy('name')->get(),
-            'pageTitle' => 'Add Expense',
+            'categories' => $this->activeCategories($tenant),
+            // The dropdown alone never explained where categories come from. This flag
+            // lets the form offer the management link only when it would actually work.
+            'canManageCategories' => $this->auth->can('expenses.update') || $this->auth->can('expenses.create'),
+            'pageTitle' => __('Add Expense'),
             'submitUrl' => route('expenses.store'),
         ]);
+    }
+
+    /**
+     * Active categories for the picker.
+     *
+     * Deactivated categories are hidden so they cannot be attached to new expenses,
+     * matching how suppliers and warehouses are filtered. `expense_categories` is a
+     * separate concept from the product `categories` and is never mixed with it.
+     */
+    private function activeCategories(Tenant $tenant)
+    {
+        return ExpenseCategory::query()
+            ->where('tenant_id', $tenant->id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
     }
 
     public function store(Request $request)
@@ -64,7 +84,10 @@ class ExpensesController extends Controller
         $expense = DB::transaction(function () use ($tenant, $validated) {
             return Expense::create([
                 'tenant_id' => $tenant->id,
-                'category_id' => $validated['category_id'],
+                // `category_id` is nullable, so Laravel omits the key entirely when the
+                // field is left blank. Reading $validated['category_id'] directly threw
+                // "Undefined array key" and turned every category-less expense into a 500.
+                'category_id' => $validated['category_id'] ?? null,
                 'description' => $validated['description'],
                 'amount' => \App\Services\Money::centsFromDisplay($validated['amount']),
                 'expense_date' => $validated['expense_date'],
@@ -76,7 +99,7 @@ class ExpensesController extends Controller
 
         AuditLogger::log('expense.created', $expense, ['amount' => $expense->amount, 'category' => $expense->category?->name]);
 
-        return redirect()->route('expenses.index')->with('status', ['type' => 'success', 'message' => 'Expense recorded.']);
+        return redirect()->route('expenses.index')->with('status', ['type' => 'success', 'message' => __('Expense recorded.')]);
     }
 
     public function show(Expense $expense)
@@ -96,10 +119,20 @@ class ExpensesController extends Controller
 
         $tenant = request()->user()->currentTenant;
 
+        // Same reasoning as the purchase form: a category deactivated after the expense
+        // was recorded still belongs to it, so it must stay selectable or saving would
+        // silently drop the association.
+        $categories = $this->activeCategories($tenant);
+
+        if ($expense->category && ! $categories->contains('id', $expense->category_id)) {
+            $categories = $categories->concat(collect([$expense->category]));
+        }
+
         return view('expenses.form', [
             'expense' => $expense->load('category'),
-            'categories' => ExpenseCategory::where('tenant_id', $tenant->id)->orderBy('name')->get(),
-            'pageTitle' => 'Edit Expense',
+            'categories' => $categories,
+            'canManageCategories' => $this->auth->can('expenses.update') || $this->auth->can('expenses.create'),
+            'pageTitle' => __('Edit Expense'),
             'submitUrl' => route('expenses.update', $expense),
         ]);
     }
@@ -117,7 +150,7 @@ class ExpensesController extends Controller
 
         AuditLogger::log('expense.updated', $expense, ['amount' => $expense->amount]);
 
-        return redirect()->route('expenses.index')->with('status', ['type' => 'success', 'message' => 'Expense updated.']);
+        return redirect()->route('expenses.index')->with('status', ['type' => 'success', 'message' => __('Expense updated.')]);
     }
 
     public function destroy(Request $request, Expense $expense)
@@ -129,7 +162,7 @@ class ExpensesController extends Controller
 
         $expense->delete();
 
-        return redirect()->route('expenses.index')->with('status', ['type' => 'success', 'message' => 'Expense deleted.']);
+        return redirect()->route('expenses.index')->with('status', ['type' => 'success', 'message' => __('Expense deleted.')]);
     }
 
     private function rules(Request $request): array

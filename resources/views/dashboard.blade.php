@@ -8,7 +8,7 @@
 
             <a href="{{ route('billing.index') }}"
                class="inline-flex shrink-0 items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
-                {{ __('Manage billing') }}
+                {{ __('Manage subscription') }}
             </a>
         </div>
     </x-slot>

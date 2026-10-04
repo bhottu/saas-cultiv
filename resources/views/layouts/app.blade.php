@@ -16,9 +16,8 @@
              any page that renders <x-seo /> without saying so — such a page is unindexed
              by default rather than by request. --}}
         <x-seo robots="noindex, nofollow" />
-        <meta name="theme-color" content="{{ config('seo.theme_color') }}">
-        <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
-        <link rel="alternate icon" type="image/png" sizes="64x64" href="{{ asset('favicon-64.png') }}">
+        <meta name="theme-color" content="{{ \App\Models\SeoSetting::config('theme_color') }}">
+        <x-favicon />
 
         {{-- Cultiv One is installable as a whole app (not a POS-only PWA): the manifest
              is scoped to "/" and start_url opens the dashboard, from where every module

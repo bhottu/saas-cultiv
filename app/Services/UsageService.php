@@ -64,7 +64,7 @@ class UsageService
 
     public function limit(Tenant $tenant, string $metric): ?int
     {
-        $plan = $tenant->activeSubscription?->plan
+        $plan = $tenant->effectivePlan()
             ?? Plan::where('is_free_tier', true)->first();
 
         return $plan?->limit($metric);
@@ -165,19 +165,23 @@ class UsageService
 
     public function planFor(Tenant $tenant): ?Plan
     {
-        return $tenant->activeSubscription?->plan ?? Plan::where('is_free_tier', true)->first();
+        return $tenant->effectivePlan() ?? Plan::where('is_free_tier', true)->first();
     }
 
     /** Resolve a tenant's own plan explicitly, independent of the request's current workspace. */
     private function ownedTenantPlan(Tenant $tenant): ?Plan
     {
-        return Subscription::withoutGlobalScopes()
-            ->where('tenant_id', $tenant->id)
-            ->whereIn('status', ['trialing', 'active', 'past_due', 'paused'])
-            ->whereNull('ended_at')
-            ->latest('id')
-            ->with('plan')
-            ->first()?->plan;
+        // effectivePlan() covers the platform-admin case; this raw query is only needed
+        // when the workspace has no subscription of its own to read, which is why it
+        // runs without the tenant global scope.
+        return $tenant->effectivePlan()
+            ?? Subscription::withoutGlobalScopes()
+                ->where('tenant_id', $tenant->id)
+                ->whereIn('status', ['trialing', 'active', 'past_due', 'paused'])
+                ->whereNull('ended_at')
+                ->latest('id')
+                ->with('plan')
+                ->first()?->plan;
     }
 
     private function resourceLabel(string $metric): string

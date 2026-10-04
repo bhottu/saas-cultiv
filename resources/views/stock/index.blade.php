@@ -7,9 +7,16 @@
     </x-slot>
 
     <div class="mx-auto max-w-7xl space-y-6 py-12 sm:px-6 lg:px-8">
+        {{-- Flash banner. The guard has always read the flash through the session() helper,
+             but the body read `$session['status']['message']` — and $session is not a Blade
+             variable at all. The `?? ''` silently swallowed the miss, so a successful
+             adjustment rendered an EMPTY green box and no text: the notification looked
+             like it never arrived. Read the flash once, then use the local. --}}
         @if (session('status'))
-            <div class="rounded-lg p-3 {{ ($session['status']['type'] ?? 'success') === 'error' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800' }}">
-                {{ $session['status']['message'] ?? '' }}
+            @php($stockStatus = session('status'))
+            <div role="{{ ($stockStatus['type'] ?? 'success') === 'error' ? 'alert' : 'status' }}"
+                 class="rounded-lg p-3 {{ ($stockStatus['type'] ?? 'success') === 'error' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800' }}">
+                {{ $stockStatus['message'] ?? '' }}
             </div>
         @endif
 
@@ -119,7 +126,3 @@
         @endif
     </div>
 </x-app-layout>
-
-            </div>
-            <div class="border-t px-4 py-3">{{ $products->links() }}</div>
-        </div>

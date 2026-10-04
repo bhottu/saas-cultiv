@@ -1,6 +1,6 @@
 <x-app-layout>
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ __('Billing') }}</h2>
+        <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ __('Subscription') }}</h2>
     </x-slot>
 
     <div class="py-12 max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
@@ -37,25 +37,34 @@
 
         {{-- Current subscription --}}
         <div class="bg-white rounded-lg shadow p-6">
-            @if ($subscription)
+            {{-- A platform administrator's plan is permanent, so the screen shows the
+                 resolved plan and "Active Forever" instead of a status badge and a
+                 renewal date it will never reach. --}}
+            @if ($isPermanent || $subscription)
                 <div class="flex flex-wrap justify-between items-center">
                     <div>
-                        <span class="text-sm text-gray-500">Current plan:</span>
-                        <span class="font-bold text-lg">{{ $subscription->plan->name }}</span>
-                        <span class="text-sm px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 ml-2">{{ ucfirst($subscription->status) }}</span>
-                        @if ($subscription->current_period_end)
+                        <span class="text-sm text-gray-500">{{ __('Current plan:') }}</span>
+                        <span class="font-bold text-lg">{{ ($plan ?? $subscription?->plan)?->name }}</span>
+                        @if ($isPermanent)
+                            <span class="text-sm px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 ml-2">{{ __('Active Forever') }}</span>
+                        @else
+                            <span class="text-sm px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 ml-2">{{ ucfirst($subscription->status) }}</span>
+                        @endif
+                        @if (! $isPermanent && $subscription->current_period_end)
                             <span class="text-sm text-gray-500 ml-3">{{ ucfirst($subscription->status) === 'Trial' ? 'Trial ends' : 'Renews' }} {{ $subscription->current_period_end->format('d M Y') }}</span>
                         @endif
                     </div>
+                    @if (! $isPermanent)
                     <form method="POST" action="{{ route('billing.checkout') }}">
                         @csrf
                         <input type="hidden" name="plan" value="free">
                         <input type="hidden" name="cycle" value="monthly">
                         <button class="text-sm text-red-600 underline" @disabled($subscription?->plan?->is_free_tier)>Downgrade to Free</button>
                     </form>
+                    @endif
                 </div>
             @else
-                <p>No subscription yet — pick a plan below.</p>
+                <p>{{ __('No subscription yet — pick a plan below.') }}</p>
             @endif
         </div>
 

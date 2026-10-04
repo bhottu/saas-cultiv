@@ -190,16 +190,38 @@
                         </div>
 
                         <div class="border-t border-gray-100 pt-1">
-                            {{-- Install / fullscreen live in the application (user) menu so
-                                 mobile keeps an uncluttered header, and the same entries
-                                 work on every page. Both hide themselves when the browser
-                                 cannot do them, and neither ever prompts on its own. --}}
-                            <div x-data="pwaInstall" x-init="init()" x-cloak x-show="canInstall">
-                                <button type="button" @click="install()"
+                            {{-- Install / fullscreen live in the application (user) menu so mobile keeps
+                                 an uncluttered header, and the same entries work on every
+                                 page. Both hide themselves when the browser cannot do
+                                 them, and neither ever prompts on its own.
+
+                                 TWO branches, ONE shared component:
+
+                                 • Chromium — the button only appears once the browser has
+                                   actually raised `beforeinstallprompt`, and the click
+                                   replays that real prompt.
+
+                                 • iOS — there is no such API. Rather than ship a button
+                                   that would do nothing, iOS gets the real instruction
+                                   as text. It is deliberately NOT a <button>: nothing
+                                   can be triggered from the page on that platform. --}}
+                            <div x-data="pwaInstall" x-init="init()" x-cloak x-show="canInstall || showIosInstructions">
+                                <button type="button" @click="install()" x-show="canInstall"
                                         class="flex w-full items-center gap-2 px-4 py-2 text-start text-sm text-gray-700 hover:bg-gray-100">
                                     <x-nav-icon name="download" class="h-4 w-4 text-gray-400" />
                                     {{ __('Install Cultiv One') }}
                                 </button>
+
+                                <div x-show="showIosInstructions"
+                                     class="px-4 py-2 text-start text-xs text-gray-500">
+                                    <div class="flex items-center gap-2 font-medium text-gray-700">
+                                        <x-nav-icon name="download" class="h-4 w-4 text-gray-400" />
+                                        {{ __('Install Cultiv One') }}
+                                    </div>
+                                    <p class="mt-1">
+                                        {{ __('On iPhone and iPad, tap the Share button in the browser, then choose "Add to Home Screen".') }}
+                                    </p>
+                                </div>
                             </div>
 
                             <div x-data="fullscreenToggle" x-init="init()" x-cloak x-show="supported" class="sm:hidden">

@@ -11,7 +11,7 @@
  */
 
 return [
-    'Billing' => 'Billing',
+    'Subscription' => 'Subscription',
     'Cancel & create new' => 'Cancel & create new',
     'Continue payment' => 'Continue payment',
     'Payment pending' => 'Payment pending',

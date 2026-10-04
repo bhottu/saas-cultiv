@@ -12,10 +12,9 @@
              the only route listed in config('seo.indexable_routes'); every other page
              on the site inherits noindex by omission. --}}
         <x-seo home />
-        <meta name="theme-color" content="{{ config('seo.theme_color') }}">
+        <meta name="theme-color" content="{{ \App\Models\SeoSetting::config('theme_color') }}">
 
-        <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
-        <link rel="alternate icon" type="image/png" sizes="64x64" href="{{ asset('favicon-64.png') }}">
+        <x-favicon />
         {{-- Apple pins the home-screen icon from this tag on iOS; without it Safari
              falls back to a screenshot of the page. Reuses the existing PWA artwork
              rather than introducing a second set of icons to keep in step. --}}
@@ -617,5 +616,37 @@
                 </div>
             </div>
         </footer>
-    </body>
+    {{-- Floating install entry point.
+
+         ONE install source: this reuses the same pwaInstall component the application
+         header uses, so there is no second beforeinstallprompt listener, no second
+         install state and no second service worker anywhere.
+
+         Visibility rules (all inside the shared component):
+           • installed / standalone  → nothing renders
+           • Chromium with a prompt → a real button that opens the native dialog
+           • iOS                    → the same button, revealing Share → Add to Home Screen
+           • anything else          → nothing renders, never a dead control
+
+         Width is w-fit so it hugs its label instead of spanning the viewport, and the
+         safe-area inset keeps it clear of the iOS home indicator. z-50 sits above the
+         sticky header (z-40) without covering any navigation: it is anchored to the
+         bottom of the viewport, where the footer already ends. --}}
+    <div x-data="pwaInstall" x-init="init()" x-cloak x-show="!installed && (canInstall || showIosInstructions)"
+         class="fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 pb-4 pointer-events-none sm:justify-end sm:px-6 sm:pb-6">
+        <div class="pointer-events-auto w-fit max-w-sm">
+            <div x-show="iosHelpOpen" x-transition
+                 role="status"
+                 class="mb-2 w-fit max-w-xs rounded-lg bg-gray-900 px-3 py-2 text-start text-xs text-white shadow-lg">
+                {{ __('Open the Share menu in the browser, then choose "Add to Home Screen" to install Cultiv.') }}
+            </div>
+
+            <button type="button" @click="activate()"
+                    class="inline-flex items-center gap-2 rounded-full bg-gray-900 px-4 py-3 text-sm font-medium text-white shadow-lg hover:bg-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2">
+                <x-nav-icon name="download" class="h-4 w-4" />
+                {{ __('Install Cultiv') }}
+            </button>
+        </div>
+    </div>
+</body>
 </html>

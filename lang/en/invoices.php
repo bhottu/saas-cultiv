@@ -12,4 +12,5 @@
 
 return [
     'Business invoices' => 'Business invoices',
+    'Invoices' => 'Invoices',
 ];

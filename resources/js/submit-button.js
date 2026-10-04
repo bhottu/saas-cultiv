@@ -8,6 +8,8 @@
  *
  * Rules it satisfies:
  *  - fires the moment the form is actually submitted, not merely clicked;
+ *  - runs AFTER the form's own onsubmit handler, so a cancelled `confirm()` leaves
+ *    the button completely untouched — no spinner, no "Deleting…", no latched guard;
  *  - disables the button and swaps its label, so a duplicate row cannot be written;
  *  - puts the state back on `pageshow` (covers back/forward and failed navigations);
  *  - arms a safety timeout so a request that never resolves still frees the button;
@@ -179,8 +181,22 @@ export function installSubmitLoading() {
         return;
     }
 
-    // Capture phase: this must run before any handler that might stop propagation,
-    // and it must not fire while native validation is still rejecting the form.
+    // Bubble phase, NOT capture.
+    //
+    // It has to run AFTER the form's own onsubmit handler. Nineteen listing screens
+    // guard a destructive action with `onsubmit="return confirm('…')"`, and `confirm`
+    // runs at the TARGET phase — before any document-level bubble listener.
+    //
+    // When this listener used to be registered with `true` (capture), it marked the
+    // button busy *before* confirm() had been asked anything. Pressing Cancel then
+    // closed the dialog and left the button spinning on "Deleting…" forever, because
+    // releaseBusy() only ever runs on `pageshow` — i.e. after a real navigation that
+    // was never going to happen. Worse, it also latched `busySubmitted`, so the *next*
+    // genuine confirm+submit was swallowed by the double-submit guard and the record
+    // could never be deleted at all.
+    //
+    // Running in the bubble phase means defaultPrevented already reflects the user's
+    // answer, and a cancelled confirmation touches no state whatsoever.
     document.addEventListener('submit', (event) => {
         const form = event.target;
 
@@ -191,6 +207,14 @@ export function installSubmitLoading() {
         // A GET form only reads (search, filters, exports of a listing). Reporting
         // "Saving…" there would be a lie about a database write.
         if ((form.getAttribute('method') || 'get').toLowerCase() === 'get') {
+            return;
+        }
+
+        // The confirmation was cancelled (confirm() returned false), or some other
+        // handler vetoed the submission. Nothing was sent, so nothing may change:
+        // no spinner, no disabled button, and — crucially — no latched double-submit
+        // guard that would break the next real attempt.
+        if (event.defaultPrevented) {
             return;
         }
 
@@ -214,7 +238,7 @@ export function installSubmitLoading() {
 
             markBusy(button);
         });
-    }, true);
+    });
 
     // Restores the state after a real navigation, including Back/Forward via the
     // bfcache, where the DOM is handed back exactly as the user left it.

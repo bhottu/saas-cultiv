@@ -66,9 +66,12 @@ class PurchasesController extends Controller
         return view('purchases.form', [
             'purchase' => new Purchase(),
             'suppliers' => $tenant->suppliers()->active()->orderBy('name')->get(),
+            // Drives the empty-supplier state: the page may only offer the "Add supplier"
+            // call to action when this user would actually be allowed through it.
+            'canCreateSupplier' => $this->auth->can('suppliers.create'),
             'products' => Product::where('is_active', true)->orderBy('name')->get(),
-            'warehouses' => Warehouse::where('is_active', true)->orderBy('name')->get(),
-            'pageTitle' => 'New Purchase Order',
+            'warehouses' => $tenant->warehouses()->active()->orderBy('name')->get(),
+            'pageTitle' => __('New Purchase Order'),
             'submitUrl' => route('purchases.store'),
         ]);
     }
@@ -119,7 +122,7 @@ class PurchasesController extends Controller
         });
 
         AuditLogger::log('purchase.created', $purchase, ['invoice_number' => $purchase->invoice_number, 'total' => $purchase->total]);
-        return redirect()->route('purchases.show', $purchase)->with('status', ['type' => 'success', 'message' => 'Purchase order created. Receive it to increase stock.']);
+        return redirect()->route('purchases.show', $purchase)->with('status', ['type' => 'success', 'message' => __('Purchase order created. Receive it to increase stock.')]);
     }
 
     public function edit(Purchase $purchase)
@@ -128,11 +131,24 @@ class PurchasesController extends Controller
         $this->ensureOwned($purchase);
         abort_unless(in_array($purchase->status, ['draft', 'ordered'], true), 403, 'Received purchases are immutable.');
         $tenant = request()->user()->currentTenant;
+
+        // A supplier deactivated after the order was placed is still what this purchase
+        // belongs to. Without appending it, the dropdown would lose the record's current
+        // value and the form would silently submit a different supplier on save.
+        $suppliers = $tenant->suppliers()->active()->orderBy('name')->get();
+
+        if ($purchase->supplier && ! $suppliers->contains('id', $purchase->supplier_id)) {
+            $suppliers = $suppliers->concat(collect([$purchase->supplier]));
+        }
+
         return view('purchases.form', [
-            'purchase' => $purchase->load('items'), 'suppliers' => $tenant->suppliers()->active()->orderBy('name')->get(),
+            'purchase' => $purchase->load('items'),
+            'suppliers' => $suppliers,
+            'canCreateSupplier' => $this->auth->can('suppliers.create'),
             'products' => Product::where('is_active', true)->orderBy('name')->get(),
             'warehouses' => $tenant->warehouses()->active()->orderBy('name')->get(),
-            'pageTitle' => 'Edit Purchase Order', 'submitUrl' => route('purchases.update', $purchase),
+            'pageTitle' => __('Edit Purchase Order'),
+            'submitUrl' => route('purchases.update', $purchase),
         ]);
     }
 
@@ -159,7 +175,7 @@ class PurchasesController extends Controller
                 'total' => $totals['total'], 'outstanding' => max(0, $totals['total'] - (int) ($purchase->invoice?->amount_paid ?? 0))]);
         });
         AuditLogger::log('purchase.updated', $purchase, ['invoice_number' => $purchase->invoice_number]);
-        return redirect()->route('purchases.show', $purchase)->with('status', ['type' => 'success', 'message' => 'Purchase updated.']);
+        return redirect()->route('purchases.show', $purchase)->with('status', ['type' => 'success', 'message' => __('Purchase updated.')]);
     }
 
     public function destroy(Purchase $purchase)
@@ -170,7 +186,7 @@ class PurchasesController extends Controller
         $purchase->invoice()?->delete();
         $purchase->delete();
         AuditLogger::log('purchase.deleted', $purchase, ['invoice_number' => $purchase->invoice_number]);
-        return redirect()->route('purchases.index')->with('status', ['type' => 'success', 'message' => 'Draft purchase deleted.']);
+        return redirect()->route('purchases.index')->with('status', ['type' => 'success', 'message' => __('Draft purchase deleted.')]);
     }
 
     public function receive(Purchase $purchase)
@@ -179,7 +195,7 @@ class PurchasesController extends Controller
         $this->ensureOwned($purchase);
 
         if ($purchase->status !== 'ordered') {
-            return back()->with('status', ['type' => 'error', 'message' => 'Only ordered purchases can be received.']);
+            return back()->with('status', ['type' => 'error', 'message' => __('Only ordered purchases can be received.')]);
         }
 
         DB::transaction(function () use ($purchase) {
@@ -212,7 +228,7 @@ class PurchasesController extends Controller
             AuditLogger::log('purchase.received', $purchase, ['invoice_number' => $purchase->invoice_number]);
         });
 
-        return redirect()->route('purchases.show', $purchase)->with('status', ['type' => 'success', 'message' => 'Purchase received. Stock updated.']);
+        return redirect()->route('purchases.show', $purchase)->with('status', ['type' => 'success', 'message' => __('Purchase received. Stock updated.')]);
     }
 
 
@@ -222,7 +238,7 @@ class PurchasesController extends Controller
         $this->ensureOwned($purchase);
 
         if (! in_array($purchase->status, ['ordered', 'received'])) {
-            return back()->with('status', ['type' => 'error', 'message' => 'Cannot cancel this purchase.']);
+            return back()->with('status', ['type' => 'error', 'message' => __('Cannot cancel this purchase.')]);
         }
 
         DB::transaction(function () use ($purchase) {
@@ -248,7 +264,7 @@ class PurchasesController extends Controller
             AuditLogger::log('purchase.cancelled', $purchase, ['invoice_number' => $purchase->invoice_number]);
         });
 
-        return redirect()->route('purchases.show', $purchase)->with('status', ['type' => 'success', 'message' => 'Purchase cancelled.']);
+        return redirect()->route('purchases.show', $purchase)->with('status', ['type' => 'success', 'message' => __('Purchase cancelled.')]);
     }
 
     private function rules(Request $request, \App\Models\Tenant $tenant): array

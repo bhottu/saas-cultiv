@@ -3,7 +3,9 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "dev": "vite",
+        "test:pwa": "node tests/js/pwa-install-states.mjs",
+        "test:submit": "node tests/js/submit-cancel-states.mjs"
     },
     "devDependencies": {
         "@tailwindcss/forms": "^0.5.2",

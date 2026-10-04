@@ -6,10 +6,41 @@
                 <p class="truncate text-sm text-gray-500">{{ __('Buyers of this workspace — a sale can also be a walk-in.') }}</p>
             </div>
 
-            <a href="{{ route('customers.create') }}"
-               class="inline-flex shrink-0 items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
-                {{ __('Add customer') }}
-            </a>
+            {{-- Both links carry the CURRENT filter as query parameters, so what downloads is
+                 the list on screen — matched against the whole workspace, not just the
+                 visible page.
+
+                 The shared x-dropdown component is reused rather than a bespoke menu:
+                 it already handles open/close, @click.outside and Escape, which is the
+                 behaviour that keeps this usable on a phone. --}}
+            <div class="flex shrink-0 flex-wrap items-center gap-2">
+                <x-dropdown align="right" width="56">
+                    <x-slot name="trigger">
+                        <button type="button"
+                                class="inline-flex shrink-0 items-center rounded-lg bg-white px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50">
+                            {{ __('Export Contacts') }}
+                        </button>
+                    </x-slot>
+
+                    <x-slot name="content">
+                        <div class="py-1">
+                            <a href="{{ route('customers.export', array_merge($exportFilters, ['format' => 'vcf'])) }}"
+                               class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                {{ __('Export as VCF') }}
+                            </a>
+                            <a href="{{ route('customers.export', array_merge($exportFilters, ['format' => 'csv'])) }}"
+                               class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                {{ __('Export as CSV') }}
+                            </a>
+                        </div>
+                    </x-slot>
+                </x-dropdown>
+
+                <a href="{{ route('customers.create') }}"
+                   class="inline-flex shrink-0 items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                    {{ __('Add customer') }}
+                </a>
+            </div>
         </div>
     </x-slot>
 

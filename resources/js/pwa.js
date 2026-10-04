@@ -26,20 +26,85 @@ function isStandalone() {
 }
 
 /**
+ * True on iPhone/iPad browsers.
+ *
+ * iPadOS 13+ reports a desktop Safari user agent, so the touch-point probe is what
+ * actually distinguishes an iPad from a Mac. Every iOS browser is WebKit-backed, which is
+ * why this matters: the whole platform shares one install path and none of them implement
+ * `beforeinstallprompt`.
+ */
+function isIos() {
+    if (typeof navigator === 'undefined') {
+        return false;
+    }
+
+    return /iP(hone|ad|od)/i.test(navigator.userAgent)
+        || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+/**
  * Alpine component: the "Install Cultiv One" control.
  *
- * Renders nothing until the browser has raised `beforeinstallprompt`, so browsers
- * without PWA installation (most in-app browsers, Firefox desktop) simply show no
- * button rather than a control that cannot work. Once installed, the button is
- * removed for good: there is nothing left to install.
+ * Two platforms, one component — there is deliberately no second install logic anywhere.
+ *
+ * Chromium (desktop Chrome/Edge, Android): the browser raises `beforeinstallprompt`, which
+ * is captured and replayed from a real click. Nothing is shown until that event arrives,
+ * so browsers that never offer installation show no button at all.
+ *
+ * iOS Safari: `beforeinstallprompt` does not exist. Rather than pretending otherwise, the
+ * component detects the platform and shows the real instruction — Share → Add to Home
+ * Screen — as text. It is not a button, because a button there could do nothing.
+ *
+ * Once installed, both branches disappear: there is nothing left to install.
  */
 export function pwaInstall() {
     return {
         canInstall: false,
         installed: isStandalone(),
 
+        /**
+         * iOS gets instructions, not a button. Kept as its own flag so the header can
+         * render an explanation rather than a control that cannot work.
+         */
+        showIosInstructions: false,
+
+        /**
+         * iOS entry-point disclosure.
+         *
+         * On a compact floating control there is no room to print the instruction
+         * inline, so the button opens it instead. This is why the iOS control is not a
+         * dead button: tapping it visibly does something on every platform.
+         */
+        iosHelpOpen: false,
+
+        get isIos() {
+            return isIos();
+        },
+
+        /** The single action the install control performs, whichever platform we are on. */
+        activate() {
+            if (this.canInstall) {
+                return this.install();
+            }
+
+            this.iosHelpOpen = !this.iosHelpOpen;
+        },
+
         init() {
-            if (this.installed || !('onbeforeinstallprompt' in window)) {
+            // Already installed on either platform: nothing to offer, ever.
+            if (this.installed) {
+                return;
+            }
+
+            if (isIos()) {
+                // No native prompt exists on iOS, so there is no event to listen for.
+                this.showIosInstructions = true;
+                return;
+            }
+
+            if (!('onbeforeinstallprompt' in window)) {
+                // No API and not iOS (e.g. Firefox desktop): show nothing rather than a
+                // control that cannot work.
                 return;
             }
 
@@ -50,11 +115,15 @@ export function pwaInstall() {
                 event.preventDefault();
                 this.deferredPrompt = event;
                 this.canInstall = true;
+                // If the browser does offer a real prompt, the iOS text is redundant.
+                this.showIosInstructions = false;
             });
 
             window.addEventListener('appinstalled', () => {
                 this.deferredPrompt = null;
                 this.canInstall = false;
+                this.showIosInstructions = false;
+                this.iosHelpOpen = false;
                 this.installed = true;
 
                 window.dispatchEvent(new CustomEvent('cultiv:pwa-installed'));
@@ -74,6 +143,9 @@ export function pwaInstall() {
 
             try {
                 await prompt.prompt();
+                // The user may legitimately dismiss it; `outcome` is reported but never
+                // forced. On refusal nothing errors and the button simply stays away —
+                // the browser can offer installation again on a later visit.
                 await prompt.userChoice;
             } catch (e) {
                 // A failed prompt leaves the app untouched; the user can retry from the

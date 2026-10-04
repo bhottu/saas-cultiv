@@ -24,6 +24,15 @@ return [
     'Included in :plans plans.' => 'Included in :plans plans.',
     'Insights' => 'Insights',
     'Install Cultiv One' => 'Install Cultiv One',
+
+    // Landing-page floating install entry.
+    'Reset' => 'Reset',
+    'Install Cultiv' => 'Install Cultiv',
+    'Open the Share menu in the browser, then choose "Add to Home Screen" to install Cultiv.' => 'Open the Share menu in the browser, then choose "Add to Home Screen" to install Cultiv.',
+
+    // PWA install help. iOS has no programmatic install API, so on that platform this is
+    // an instruction the user follows in the browser, not a button that triggers anything.
+    'On iPhone and iPad, tap the Share button in the browser, then choose "Add to Home Screen".' => 'On iPhone and iPad, tap the Share button in the browser, then choose "Add to Home Screen".',
     'Invitation pending — choose Accept or Reject to respond.' => 'Invitation pending — choose Accept or Reject to respond.',
     'Main navigation' => 'Main navigation',
     'Manage workspaces' => 'Manage workspaces',
@@ -35,6 +44,7 @@ return [
     'Pending Invitations' => 'Pending Invitations',
     'Platform' => 'Platform',
     'Point the camera at the barcode on the product.' => 'Point the camera at the barcode on the product.',
+    'Purchasing' => 'Purchasing',
     'Read only' => 'Read only',
     'Reject' => 'Reject',
     'Rejecting…' => 'Rejecting…',

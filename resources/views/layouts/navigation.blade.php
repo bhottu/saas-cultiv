@@ -1,13 +1,15 @@
 @php
+    use Illuminate\Support\Facades\Route;
+
     // Single source of truth for the shared shell navigation.
     //
     // * Every href is a named route — no hard-coded URLs.
     // * Items are gated by the EXISTING authorization stack (TenantContext + the
     //   business permission registry) — no second RBAC is introduced. Hiding an item
     //   is a UI concern only: the controllers keep enforcing authorization server-side.
-    // * Modules that have routes but no view yet (purchases, suppliers, ...) are
-    //   deliberately NOT linked, so no menu entry ever leads to a missing view. Sales,
-    //   customers, and stock DO have views and are linked below.
+    // * Every entry below points at a page whose view ships in this build, so a menu item
+    //   can never lead to a missing view. Purchasing, suppliers, expenses and business
+    //   invoices were linked here once their views landed — not before, and not after.
     $ctx = app('tenant.context');
     $business = app(\App\Services\BusinessAuthorization::class);
     $shellUser = Auth::user();
@@ -112,6 +114,64 @@
         ];
     }
 
+    // Business invoices — the receivable/payable documents the sale and purchase flows
+    // generate. They live behind the same sales.view permission the invoice controller
+    // itself checks, so the menu mirrors the server-side gate exactly. The page filters
+    // by `?type=purchase` for supplier bills, which is why purchasing links across to it.
+    if ($business->can('sales.view')) {
+        $sales[] = [
+            'label' => __('Invoices'),
+            'icon' => 'document-report',
+            'href' => route('business-invoices.index'),
+            'active' => request()->routeIs('business-invoices.*'),
+        ];
+    }
+
+    // Purchasing: what the business buys, from whom, and what it costs to operate.
+    // All three have shipped controllers, views and permissions for a long time but had
+    // no menu entry at all, so they were reachable only by typing the URL. Grouped as the
+    // "spend" side of the business, mirroring the sales group above.
+    $purchasing = [];
+
+    if ($business->can('purchases.view')) {
+        $purchasing[] = [
+            'label' => __('Purchase Orders'),
+            'icon' => 'download',
+            'href' => route('purchases.index'),
+            'active' => request()->routeIs('purchases.*'),
+        ];
+    }
+
+    if ($business->can('suppliers.view')) {
+        $purchasing[] = [
+            'label' => __('Suppliers'),
+            'icon' => 'office',
+            'href' => route('suppliers.index'),
+            'active' => request()->routeIs('suppliers.*'),
+        ];
+    }
+
+    if ($business->can('expenses.view')) {
+        $purchasing[] = [
+            'label' => __('Expenses'),
+            'icon' => 'credit-card',
+            'href' => route('expenses.index'),
+            'active' => request()->routeIs('expenses.*'),
+        ];
+    }
+
+    // Its own entry rather than a sub-link of Expenses: it is a real tenant-scoped
+    // resource, exactly like Categories and Brands, and the expense form needs a
+    // reachable path to it. Gated on expenses.view, the same verb its controller checks.
+    if ($business->can('expenses.view')) {
+        $purchasing[] = [
+            'label' => __('Expense Categories'),
+            'icon' => 'tag',
+            'href' => route('expense-categories.index'),
+            'active' => request()->routeIs('expense-categories.*'),
+        ];
+    }
+
     // Advanced reporting + analytics are plan entitlements (Pro/Business). The menu
     // entries ALWAYS stay visible (subject to the existing RBAC permission) — a Free
     // user should be able to see what higher plans add — and carry a lock marker
@@ -161,12 +221,18 @@
     $workspaceItems = [];
 
     if ($inWorkspace) {
-        $workspaceItems[] = [
-            'label' => __('Files'),
-            'icon' => 'folder',
-            'href' => route('files.index'),
-            'active' => request()->routeIs('files.*'),
-        ];
+        // Files. Guarded on the route actually being registered rather than deleted
+        // outright: the feature is switched off in config/saas.php, so this keeps the
+        // menu honest in both states and a dead link can never appear while the routes
+        // are unregistered (route() would throw on a missing name).
+        if (Route::has('files.index')) {
+            $workspaceItems[] = [
+                'label' => __('Files'),
+                'icon' => 'folder',
+                'href' => route('files.index'),
+                'active' => request()->routeIs('files.*'),
+            ];
+        }
         $workspaceItems[] = [
             'label' => __('Team'),
             'icon' => 'users',
@@ -174,7 +240,7 @@
             'active' => request()->routeIs('team.*'),
         ];
         $workspaceItems[] = [
-            'label' => __('Billing'),
+            'label' => __('Subscription'),
             'icon' => 'credit-card',
             'href' => route('billing.index'),
             'active' => request()->routeIs('billing.*'),
@@ -252,6 +318,10 @@
         $targetGroup = strtolower($mItem['group'] ?? 'sales');
         if ($targetGroup === 'sales') {
             $sales[] = $mItem;
+        } elseif ($targetGroup === 'purchasing') {
+            // Reachable now that the group exists; a module may declare
+            // 'sidebar_group' => 'Purchasing' and land in the right place.
+            $purchasing[] = $mItem;
         } elseif ($targetGroup === 'inventory') {
             $inventory[] = $mItem;
         } else {
@@ -262,6 +332,7 @@
     $navGroups = array_values(array_filter([
         ['label' => __('Overview'), 'items' => $overview],
         ['label' => __('Sales'), 'items' => $sales],
+        ['label' => __('Purchasing'), 'items' => $purchasing],
         ['label' => __('Insights'), 'items' => $advanced],
         ['label' => __('Inventory'), 'items' => $inventory],
         ['label' => __('Workspace'), 'items' => $workspaceItems],
