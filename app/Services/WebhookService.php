@@ -109,6 +109,162 @@ class WebhookService
         }
     }
 
+    /**
+     * Kasera Pay webhook: verify → dedupe → process, idempotent like handle().
+     *
+     * Differences from the QRIS.PW path, all dictated by Kasera's spec:
+     *  - the signature is a HEADER (Kasera-Signature-V1: t=<unix>,v1=<hex>), an HMAC of
+     *    "t.rawBody" with the webhook secret and a 300s tolerance; the legacy bare
+     *    Kasera-Signature header (HMAC of rawBody only) is still accepted so a secret
+     *    rotation on their side cannot silently drop deliveries;
+     *  - the payment is addressed by data.external_id (= our order_id) and the
+     *    transaction by data.payment_request_id (= what we stored at create);
+     *  - "money wins": Kasera may deliver payment.paid AFTER payment.expired — their
+     *    words — so paid is accepted from expired as well as from pending, while every
+     *    other event still only moves a pending payment. A local window that closed
+     *    must not swallow money that arrived.
+     */
+    public function handleKasera(array $payload, string $rawBody, string $signatureHeader): array
+    {
+        $secret = (string) config('services.kasera.webhook_secret');
+        $valid = $this->verifyKaseraSignature($rawBody, $signatureHeader, $secret);
+
+        $type = (string) ($payload['type'] ?? '');
+        $data = is_array($payload['data'] ?? null) ? $payload['data'] : [];
+        $txnId = (string) ($data['payment_request_id'] ?? '');
+        $orderId = (string) ($data['external_id'] ?? '');
+
+        // Idempotency anchor: provider + transaction + event type is processed once.
+        $event = WebhookEvent::firstOrCreate(
+            ['event_id' => WebhookEvent::fingerprint('kasera', $txnId, $type)],
+            [
+                'provider' => 'kasera',
+                'transaction_id' => $txnId,
+                'order_id' => $orderId,
+                'signature_valid' => $valid,
+                'payload' => $payload,
+                'status' => 'received',
+            ]
+        );
+
+        if (! $valid) {
+            $event->update(['status' => 'rejected', 'note' => 'invalid signature']);
+            Log::warning('kasera.webhook.rejected', ['order_id' => $orderId, 'event_type' => $type]);
+            abort(403, 'Invalid webhook signature.');
+        }
+
+        if (! $event->wasRecentlyCreated && $event->status === 'processed') {
+            return ['status' => 'duplicate', 'event_id' => $event->id]; // ack, no-op
+        }
+
+        $payment = Payment::where('order_id', $orderId)->first();
+
+        if (! $payment) {
+            $event->update(['status' => 'ignored', 'note' => 'unknown external_id']);
+            abort(404, 'Unknown order.');
+        }
+
+        if ($payment->provider_transaction_id && $txnId && $payment->provider_transaction_id !== $txnId) {
+            $event->update(['status' => 'rejected', 'note' => 'transaction id mismatch']);
+            abort(422, 'Transaction mismatch.');
+        }
+
+        try {
+            DB::transaction(function () use ($payment, $data, $type, $event, $txnId, $payload) {
+                // Lock the payment row to serialize concurrent deliveries.
+                $payment = Payment::whereKey($payment->id)->lockForUpdate()->first();
+
+                // Amount must match what we invoiced — checked before ANY transition,
+                // money-wins included, so a mismatched event can never settle anything.
+                if ((int) ($data['amount'] ?? 0) !== (int) $payment->amount) {
+                    $event->update(['status' => 'rejected', 'note' => 'amount mismatch']);
+                    Log::error('kasera.webhook.amount_mismatch', ['order_id' => $payment->order_id]);
+
+                    return;
+                }
+
+                // paid_at lives inside data for Kasera; hoist it for markPaid().
+                $normalised = $payload + ['paid_at' => $data['paid_at'] ?? now()->toIso8601String()];
+
+                match ($type) {
+                    'payment.paid' => in_array($payment->status, ['pending', 'expired'], true)
+                        ? $this->markPaid($payment, $txnId, $normalised)
+                        : null,
+                    'payment.expired' => $payment->status === 'pending'
+                        ? $this->markTerminal($payment, 'expired', $normalised)
+                        : null,
+                    'payment.failed' => $payment->status === 'pending'
+                        ? $this->markTerminal($payment, 'failed', $normalised)
+                        : null,
+                    default => null, // unknown / informational type → ack and ignore
+                };
+
+                $event->update(['status' => 'processed', 'processed_at' => now()]);
+            });
+
+            return ['status' => 'ok', 'payment' => $payment->refresh()->status];
+        } catch (\Throwable $e) {
+            $event->update(['status' => 'ignored', 'note' => substr($e->getMessage(), 0, 200)]);
+            Log::error('kasera.webhook.error', ['error' => $e->getMessage(), 'order_id' => $orderId]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Kasera signature verification.
+     *
+     * V1: "t=<unix>,v1=<hex>[,v1=<hex>]" — each v1 is HMAC-SHA256(secret, t + "." +
+     * rawBody); several v1 entries may appear during a secret rotation, so ANY match
+     * wins. The timestamp is itself signed, and |now - t| beyond the documented 300s
+     * tolerance is rejected before any HMAC work, so an old captured body can never
+     * be replayed inside a fresh envelope.
+     *
+     * Legacy: a bare HMAC-SHA256 of rawBody (no timestamp), accepted only when the
+     * header carries no V1 parts at all.
+     *
+     * A missing secret or missing header is always invalid — never "accepted because
+     * there was nothing to check against".
+     */
+    private function verifyKaseraSignature(string $rawBody, string $header, string $secret): bool
+    {
+        $header = trim($header);
+
+        if ($secret === '' || $header === '') {
+            return false;
+        }
+
+        if (str_contains($header, 'v1=')) {
+            $timestamp = null;
+            $signatures = [];
+
+            foreach (explode(',', $header) as $part) {
+                [$key, $value] = array_pad(explode('=', trim($part), 2), 2, null);
+
+                if ($key === 't' && $value !== null) {
+                    $timestamp = (int) $value;
+                } elseif ($key === 'v1' && $value !== null) {
+                    $signatures[] = $value;
+                }
+            }
+
+            if ($timestamp === null || $signatures === [] || abs(time() - $timestamp) > 300) {
+                return false;
+            }
+
+            $expected = hash_hmac('sha256', $timestamp.'.'.$rawBody, $secret);
+
+            foreach ($signatures as $signature) {
+                if (hash_equals($expected, $signature)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        return hash_equals(hash_hmac('sha256', $rawBody, $secret), $header);
+    }
+
     private function markPaid(Payment $payment, string $txnId, array $payload): void
     {
         $payment->update([

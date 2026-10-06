@@ -30,6 +30,7 @@
             <select id="provider" name="provider" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
                 <option value="">{{ __('All providers') }}</option>
                 <option value="qrispw" @selected(($filters['provider'] ?? '') === 'qrispw')>QRIS.PW</option>
+                <option value="kasera" @selected(($filters['provider'] ?? '') === 'kasera')>Kasera Pay</option>
             </select>
         </div>
     </x-admin-filters>

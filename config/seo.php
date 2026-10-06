@@ -76,6 +76,7 @@ return [
         'tokens.index' => 'API tokens',
         'tenants.index' => 'Your workspaces',
         'admin.dashboard' => 'Admin',
+        'admin.billing.edit' => 'Payment settings',
         'admin.seo.edit' => 'SEO Settings',
         'admin.plans.edit' => 'Edit plan',
     ],

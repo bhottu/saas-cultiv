@@ -38,8 +38,17 @@ class DashboardController extends AdminController
         $sales = $this->acrossTenants(Sale::class);
         $purchases = $this->acrossTenants(Purchase::class);
 
-        $mrr = (int) $subscriptions->where('status', 'active')->where('billing_cycle', 'monthly')->sum('amount')
-            + (int) ($subscriptions->where('status', 'active')->where('billing_cycle', 'yearly')->sum('amount') / 12);
+        // amount / period_months: a 3-month prepayment contributes one third per month
+        // (the old sum counted the whole prepayment as a single month, inflating MRR),
+        // and a yearly row (period_months = 12 after the backfill) still contributes a
+        // twelfth. Computed on a clone via get() because chained where() calls mutate
+        // ONE shared builder — the old two-step sum ANDed monthly with yearly (always
+        // 0) and left billing_cycle = monthly welded onto every later clone, which
+        // quietly zeroed the subscriptions totals as well.
+        $mrr = (int) (clone $subscriptions)
+            ->where('status', 'active')
+            ->get()
+            ->sum(fn ($sub) => ((int) $sub->amount) / max(1, (int) ($sub->period_months ?? 1)));
 
         return [
             'users_total' => (clone $users)->count(),

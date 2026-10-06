@@ -259,6 +259,11 @@ Route::middleware(['auth', 'verified', 'platform.admin'])->prefix('admin')->grou
     Route::get('/plans', [\App\Http\Controllers\Admin\PlanController::class, 'index'])->name('admin.plans.index');
     Route::get('/plans/{plan}/edit', [\App\Http\Controllers\Admin\PlanController::class, 'edit'])->name('admin.plans.edit');
     Route::put('/plans/{plan}', [\App\Http\Controllers\Admin\PlanController::class, 'update'])->name('admin.plans.update');
+
+    // Platform gateway selection (QRIS.PW / Kasera Pay). Kept separate from /plans
+    // because it is a provider switch, not billing content: one radio, one audit line.
+    Route::get('/billing', [\App\Http\Controllers\Admin\BillingSettingController::class, 'edit'])->name('admin.billing.edit');
+    Route::put('/billing', [\App\Http\Controllers\Admin\BillingSettingController::class, 'update'])->name('admin.billing.update');
     // Platform-wide SEO. The slug-free path keeps it from ever being confused with the
     // plan resource above.
     Route::get('/seo', [\App\Http\Controllers\Admin\SeoController::class, 'edit'])->name('admin.seo.edit');

@@ -34,7 +34,7 @@ class PaymentService
     public const PAYMENT_WINDOW_MINUTES = 10;
 
     public function __construct(
-        private readonly QrisPwClient $client,
+        private readonly PaymentGatewayManager $gateways,
     ) {}
 
     /**
@@ -102,8 +102,16 @@ class PaymentService
         });
     }
 
-    /** Create invoice + pending QRIS payment for a plan checkout. */
-    public function createCheckout(Tenant $tenant, Plan $plan, string $cycle, $user): Payment
+    /**
+     * Create invoice + pending provider payment for a plan checkout.
+     *
+     * $months is the billing period the customer chose: one payment may cover 1, 3, 6
+     * or 12 months of the monthly price, and that number travels on the invoice
+     * metadata so activation and renewal extend the subscription by exactly what was
+     * paid. A yearly cycle IS twelve months — its price is already the yearly one, so
+     * months is recorded, not multiplied.
+     */
+    public function createCheckout(Tenant $tenant, Plan $plan, string $cycle, $user, int $months = 1): Payment
     {
         if ($cycle === 'yearly' && $plan->price_yearly <= 0) {
             throw \Illuminate\Validation\ValidationException::withMessages([
@@ -111,14 +119,24 @@ class PaymentService
             ]);
         }
 
+        $months = max(1, $months);
+
+        if ($cycle === 'yearly') {
+            $months = 12;
+        }
+
         $amount = $plan->priceFor($cycle);
+
+        if ($cycle === 'monthly' && $months > 1) {
+            $amount *= $months;
+        }
 
         // The invoice, the payment and the provider hand-off have to succeed or leave
         // nothing behind. Previously a gateway refusal (401 with no API key, timeout,
         // rate limit) blew up after the rows were already written, so every failed
         // attempt left an open invoice and a pending payment with no QR, and the
         // pending-payment notice then pointed at a payment nobody could pay.
-        return DB::transaction(function () use ($tenant, $plan, $cycle, $user, $amount) {
+        return DB::transaction(function () use ($tenant, $plan, $cycle, $user, $amount, $months) {
             // Serialise concurrent checkouts for this workspace. Two rapid Subscribe
             // clicks are two separate HTTP requests, so the client-side button state
             // cannot be trusted; locking the tenant row makes the "is there already an
@@ -133,8 +151,10 @@ class PaymentService
                 'amount' => $amount,
                 'currency' => $plan->currency,
                 'status' => 'open',
-                'description' => "{$plan->name} ({$cycle}) subscription",
-                'metadata' => ['plan_id' => $plan->id, 'billing_cycle' => $cycle],
+                'description' => $months > 1
+                    ? "{$plan->name} ({$months} months) subscription"
+                    : "{$plan->name} ({$cycle}) subscription",
+                'metadata' => ['plan_id' => $plan->id, 'billing_cycle' => $cycle, 'period_months' => $months],
                 'due_at' => now()->addHours(1),
             ]);
 
@@ -142,7 +162,10 @@ class PaymentService
                 'tenant_id' => $tenant->id,
                 'user_id' => $user->id,
                 'invoice_id' => $invoice->id,
-                'provider' => 'qrispw',
+                // The gateway chosen RIGHT NOW decides where this payment is sent.
+                // dispatchToProvider then reads it back off the row, so a later
+                // switch never redirects a payment that is already in flight.
+                'provider' => $this->gateways->active()->name(),
                 'order_id' => 'ORD-'.strtoupper(Str::random(14)),
                 'amount' => $amount,
                 'currency' => $plan->currency,
@@ -155,18 +178,14 @@ class PaymentService
         });
     }
 
-    /** Call QRIS.PW create-payment and store the QR + expiration. */
+    /** Call the payment's own gateway create-payment and store the QR + expiration. */
     public function dispatchToProvider(Payment $payment): void
     {
-        $tenant = $payment->tenant;
-
-        $resp = $this->client->createPayment([
-            'amount' => (int) $payment->amount,
-            'order_id' => $payment->order_id,
-            'customer_name' => $payment->user?->name ?? $tenant->name,
-            'customer_phone' => $tenant->settings['billing_phone'] ?? '081000000000',
-            'callback_url' => route('webhooks.qris'),
-        ], [
+        // Keyed by payments.provider: the gateway recorded when THIS payment was
+        // created, not whatever the platform points at today. Payload construction is
+        // the gateway's job — QRIS.PW wants order_id/callback_url, Kasera wants
+        // external_id/payment_methods — and neither shape belongs in this service.
+        $resp = $this->gateways->driver($payment->provider)->createPayment($payment, [
             // Correlation ids for the operator. Ids only — no credential is ever
             // passed into the gateway client or written to the log.
             'tenant_id' => $payment->tenant_id,
@@ -231,7 +250,7 @@ class PaymentService
         $string = $payment->qrisPayloadString();
 
         if ($url === null && $string === null) {
-            \Illuminate\Support\Facades\Log::warning('qrispw.qr_missing', [
+            \Illuminate\Support\Facades\Log::warning("{$payment->provider}.qr_missing", [
                 'tenant_id' => $payment->tenant_id,
                 'payment_id' => $payment->id,
                 'order_id' => $payment->order_id,
@@ -244,7 +263,7 @@ class PaymentService
             return;
         }
 
-        \Illuminate\Support\Facades\Log::info('qrispw.qr_source', [
+        \Illuminate\Support\Facades\Log::info("{$payment->provider}.qr_source", [
             'tenant_id' => $payment->tenant_id,
             'payment_id' => $payment->id,
             'order_id' => $payment->order_id,
@@ -279,7 +298,11 @@ class PaymentService
             return $payment->status;
         }
 
-        $data = $this->client->checkStatus($payment->provider_transaction_id);
+        $data = $this->gateways->driver($payment->provider)->checkStatus($payment, [
+            'tenant_id' => $payment->tenant_id,
+            'payment_id' => $payment->id,
+            'order_id' => $payment->order_id,
+        ]);
         $status = strtolower((string) ($data['status'] ?? 'pending'));
 
         return DB::transaction(function () use ($payment, $data, $status) {
@@ -290,7 +313,7 @@ class PaymentService
             }
 
             if ((int) ($data['amount'] ?? 0) !== (int) $payment->amount) {
-                Log::error('qrispw.status.amount_mismatch', ['order_id' => $payment->order_id]);
+                Log::error("{$payment->provider}.status.amount_mismatch", ['order_id' => $payment->order_id]);
                 return $payment->status;
             }
 
@@ -300,6 +323,7 @@ class PaymentService
                 'paid', 'success', 'settlement' => app(WebhookService::class)->markPaidFromStatus($payment, $data),
                 'failed' => $payment->update(['status' => 'failed', 'payload' => $payload + ['check' => $data]]),
                 'expired' => $payment->update(['status' => 'expired', 'payload' => $payload + ['check' => $data]]),
+                'cancelled' => $payment->update(['status' => 'cancelled', 'payload' => $payload + ['check' => $data]]),
                 default => $payment->update(['payload' => $payload + ['check' => $data]]),
             };
 

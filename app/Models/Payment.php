@@ -91,6 +91,28 @@ class Payment extends Model
         return null;
     }
 
+    /**
+     * The hosted checkout page the provider returned, if any.
+     *
+     * Kasera answers create-transaction with `checkout_url` — a page on their domain
+     * that renders the QR / VA picker for whatever the buyer picks. Like the QR fields
+     * above it is passed through verbatim: the browser is sent to the provider's own
+     * URL, never to one Cultiv assembled. QRIS.PW responses do not carry this key, so
+     * this returns null and the QR display is untouched.
+     */
+    public function checkoutUrl(): ?string
+    {
+        $create = $this->payload['create'] ?? null;
+
+        if (! is_array($create)) {
+            return null;
+        }
+
+        $value = $create['checkout_url'] ?? null;
+
+        return is_string($value) && trim($value) !== '' ? $value : null;
+    }
+
     public function subscription()
     {
         return $this->belongsTo(Subscription::class);

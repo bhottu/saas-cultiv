@@ -68,4 +68,28 @@ return [
         ],
     ],
 
+    /*
+    | Kasera Pay gateway (pay.kasera.id). Bearer auth with kp_test / kp_live keys.
+    | Secrets stay in .env — never in the browser, never in a log line.
+    |
+    | POST /v1/transactions creates a transaction (Idempotency-Key header dedupes
+    | retries of the same order) and answers with `id`, `checkout_url` and an
+    | optional QR string; GET /v1/transactions/{id} is the server-side fallback
+    | used by reconcile when a webhook is delayed or lost.
+    */
+    'kasera' => [
+        'api_key' => env('KASERA_API_KEY'),
+        'webhook_secret' => env('KASERA_WEBHOOK_SECRET'),
+
+        // The same QRIS rail floor as QRIS.PW: below Rp 1,000 a QRIS transaction
+        // cannot exist, so a plan priced under it is refused locally with a precise
+        // operator log instead of a confusing provider 400.
+        'min_amount' => (int) env('KASERA_MIN_AMOUNT', 1000),
+
+        'endpoints' => [
+            'create' => env('KASERA_BASE_URL', 'https://pay.kasera.id').'/v1/transactions',
+            // Retrieve = create . '/' . transaction id (see KaseraClient::checkStatus).
+        ],
+    ],
+
 ];

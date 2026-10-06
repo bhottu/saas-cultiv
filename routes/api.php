@@ -3,10 +3,16 @@
 use App\Http\Controllers\WebhookController;
 use Illuminate\Support\Facades\Route;
 
-// Payment provider webhook: no auth, signature-verified, rate-limited, idempotent.
+// Payment provider webhooks: no auth, signature-verified, rate-limited, idempotent.
 Route::post('/webhooks/qris', [WebhookController::class, 'qris'])
     ->middleware('throttle:webhook')
     ->name('webhooks.qris');
+
+// Kasera Pay delivers to its own path with its own header signature scheme; the
+// throttle bucket is shared so two gateways cannot be used to double the rate.
+Route::post('/webhooks/kasera', [WebhookController::class, 'kasera'])
+    ->middleware('throttle:webhook')
+    ->name('webhooks.kasera');
 
 // Versioned API (Sanctum personal access tokens).
 Route::prefix('v1')->middleware(['auth:sanctum', 'tenant', 'plan.feature:api_access', 'throttle:api'])->group(function () {

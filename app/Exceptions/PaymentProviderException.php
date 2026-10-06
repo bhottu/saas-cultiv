@@ -37,9 +37,9 @@ class PaymentProviderException extends RuntimeException
      */
     public array $context = [];
 
-    public static function fromProviderResponse(int $status, string $operation, array $context = []): self
+    public static function fromProviderResponse(int $status, string $operation, array $context = [], string $provider = 'QRIS.PW'): self
     {
-        $e = new self("QRIS.PW {$operation} failed (HTTP {$status}).");
+        $e = new self("{$provider} {$operation} failed (HTTP {$status}).");
         $e->providerStatus = $status;
         $e->category = match (true) {
             $status === 401, $status === 403 => 'auth',
@@ -53,9 +53,9 @@ class PaymentProviderException extends RuntimeException
     }
 
     /** We could not even talk to the provider — no HTTP status exists for this. */
-    public static function transport(string $operation, string $reason, array $context = []): self
+    public static function transport(string $operation, string $reason, array $context = [], string $provider = 'QRIS.PW'): self
     {
-        $e = new self("QRIS.PW {$operation} could not be reached ({$reason}).");
+        $e = new self("{$provider} {$operation} could not be reached ({$reason}).");
         $e->category = 'network';
         $e->context = $context + ['endpoint' => $operation, 'reason' => $reason];
 
@@ -63,9 +63,9 @@ class PaymentProviderException extends RuntimeException
     }
 
     /** The integration is not configured; no request was attempted. */
-    public static function notConfigured(string $operation, string $missing, array $context = []): self
+    public static function notConfigured(string $operation, string $missing, array $context = [], string $provider = 'QRIS.PW'): self
     {
-        $e = new self("QRIS.PW {$operation} is not configured ({$missing} is missing).");
+        $e = new self("{$provider} {$operation} is not configured ({$missing} is missing).");
         $e->category = 'configuration';
         $e->context = $context + ['endpoint' => $operation, 'missing' => $missing];
 
@@ -79,10 +79,10 @@ class PaymentProviderException extends RuntimeException
      * than anything the customer did. Retrying cannot help, so this is reported as a
      * configuration fault instead of a "try again" request error.
      */
-    public static function amountBelowMinimum(string $operation, int $amount, int $minimum, array $context = []): self
+    public static function amountBelowMinimum(string $operation, int $amount, int $minimum, array $context = [], string $provider = 'QRIS.PW'): self
     {
         $e = new self(
-            "QRIS.PW {$operation} refused locally: amount {$amount} is below the provider minimum of {$minimum}."
+            "{$provider} {$operation} refused locally: amount {$amount} is below the provider minimum of {$minimum}."
         );
         $e->category = 'configuration';
         $e->context = $context + [

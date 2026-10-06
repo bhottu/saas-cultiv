@@ -2,7 +2,7 @@
 
 > The smarter way to manage your business.
 
-Production-ready, multi-tenant business management SaaS (Laravel 12, PHP 8.2+, PostgreSQL, Redis, Tailwind, QRIS.PW payments).
+Production-ready, multi-tenant business management SaaS (Laravel 12, PHP 8.2+, PostgreSQL, Redis, Tailwind, QRIS.PW + Kasera Pay payments).
 
 ## Architecture
 
@@ -28,14 +28,15 @@ enforced server-side via gates + `TenantContext::authorize()`. Hiding UI buttons
 **Billing lifecycle**:
 
 ```
-Choose plan → Invoice created → QRIS.PW create-payment → pending (+expires_at)
-   → customer scans → webhook POST /api/webhooks/qris
+Choose plan → Invoice created → active gateway create-payment → pending (+expires_at)
+   → customer scans → webhook POST /api/webhooks/qris | /api/webhooks/kasera
    → HMAC-SHA256 signature verified → order/transaction/amount verified
    → row locked → payment=paid → invoice=paid → subscription active/renewed
    → notification queued → audit logged
 ```
 
 - Webhook idempotency: `webhook_events.event_id` = provider+transaction+status (unique); replays acked, not reprocessed.
+- Gateway selection: `/admin/billing` stores the active gateway (`payment_settings.active_gateway`); a payment keeps the gateway recorded on its row (`payments.provider`), so switching never redirects an in-flight checkout. Kasera webhooks are header-signed (`Kasera-Signature-V1: t=..,v1=..` over the raw body).
 - Webhook retries (3× per QRIS.PW docs) are safe.
 - Status fallback: `payments:reconcile` polls `check-payment.php` every 10 min for stale pending payments (≤ QRIS.PW 100 req/min limit).
 - QRIS expiry: `expires_at` stored; expired payments → `expired`; new payment creates a fresh record (never reuses an expired transaction).
@@ -46,10 +47,10 @@ Choose plan → Invoice created → QRIS.PW create-payment → pending (+expires
 | Area | Files |
 |---|---|
 | Tenancy core | `app/Concerns/BelongsToTenant.php`, `app/Services/TenantContext.php`, `app/Http/Middleware/EnsureTenantContext.php` |
-| Billing | `app/Services/{PaymentService,SubscriptionService,WebhookService,QrisPwClient}.php` |
+| Billing | `app/Services/{PaymentService,SubscriptionService,WebhookService,PaymentGateway,PaymentGatewayManager,QrisPwClient,KaseraClient}.php` |
 | Usage limits | `app/Services/UsageService.php` |
 | Files (object storage ready) | `app/Http/Controllers/FileController.php`, `config/saas.php` → `uploads` |
-| Webhook | `routes/api.php` → `WebhookController@qris` |
+| Webhook | `routes/api.php` → `WebhookController@qris` + `WebhookController@kasera` |
 | Schedules | `routes/console.php` (sweep, reminders, reconcile, purge) |
 | Tests | `tests/Feature/{QrisWebhookTest,MultiTenancyIsolationTest,SaasFlowSmokeTest,FileUploadTest}.php` |
 
@@ -77,6 +78,10 @@ QRISPW_API_KEY=...           # server-side ONLY — never in JS/browser
 QRISPW_API_SECRET=...
 QRISPW_WEBHOOK_SECRET=...
 QRISPW_CALLBACK_URL=https://your-domain.com/api/webhooks/qris
+
+KASERA_API_KEY=...           # optional 2nd gateway (pay.kasera.id), selected in /admin/billing
+KASERA_WEBHOOK_SECRET=...
+KASERA_BASE_URL=https://pay.kasera.id
 ```
 
 ## Deployment checklist (VPS)
@@ -88,7 +93,7 @@ QRISPW_CALLBACK_URL=https://your-domain.com/api/webhooks/qris
 5. Queue worker (supervisor): `php artisan queue:work --tries=3 --backoff=5`
 6. Scheduler (cron): `* * * * * php artisan schedule:run`
 7. HTTPS + HSTS (Let's Encrypt / platform TLS); `APP_DEBUG=false`
-8. Point QRIS.PW callback URL at `https://your-domain.com/api/webhooks/qris`
+8. Point QRIS.PW callback URL at `https://your-domain.com/api/webhooks/qris` (and the Kasera webhook at `https://your-domain.com/api/webhooks/kasera` when that gateway is selected)
 
 ## Backups
 

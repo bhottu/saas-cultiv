@@ -5,17 +5,25 @@
 
     <div class="py-12 max-w-3xl mx-auto sm:px-6 lg:px-8">
         <div class="bg-white rounded-lg shadow p-8 text-center" x-data="paymentPoller('{{ route('billing.payment.status', $payment) }}')">
-            <h3 class="text-lg font-bold mb-1">Scan QRIS to pay</h3>
+            @php
+                // Decided once, server-side: what artefacts did this gateway return?
+                $qrImage = $payment->qrImageUrl();
+                $qrString = $qrImage ? null : $payment->qrisPayloadString();
+                $checkoutUrl = $payment->checkoutUrl();
+                // Hosted checkout only when there is a checkout_url AND no QR to show —
+                // otherwise the QR stays the primary path and the link is a fallback.
+                $hostedOnly = $checkoutUrl !== null && $qrImage === null && $qrString === null;
+            @endphp
+            <h3 class="text-lg font-bold mb-1">{{ $hostedOnly ? __('Open the payment page to complete checkout') : 'Scan QRIS to pay' }}</h3>
             <p class="text-sm text-gray-500 mb-4">Amount: <strong>{{ \App\Services\Money::formatRupiah($payment->amount) }}</strong></p>
 
             {{-- The QR is QRIS.PW's own resource, passed through byte-for-byte:
                  Payment::qrImageUrl() reads the stored create-payment response and
                  returns it verbatim, so the scanned code is the provider's code.
                  Cultiv never assembles, re-encodes or rebuilds a QRIS payload. --}}
-            @php $qrImage = $payment->qrImageUrl(); @endphp
             @if ($qrImage)
                 <img src="{{ $qrImage }}" alt="QRIS payment code" class="mx-auto w-56 h-56 border rounded">
-            @elseif ($qrString = $payment->qrisPayloadString())
+            @elseif ($qrString)
                 {{-- The provider sent a QRIS payload but no image URL. The payload is
                      shown verbatim so the payment is still completable and so the
                      response contract can be confirmed; no QR is invented here. --}}
@@ -23,8 +31,18 @@
                     <p class="text-xs text-gray-500">QRIS code from the payment provider:</p>
                     <p class="text-xs font-mono break-all">{{ $qrString }}</p>
                 </div>
+            @elseif ($checkoutUrl)
+                {{-- No QR artefact, but Kasera handed us a hosted checkout page: that
+                     page renders the QR / payment options, and the URL is the
+                     provider's own, passed through verbatim. --}}
+                <p class="text-gray-500">{{ __('Complete this payment on the hosted payment page.') }}</p>
             @else
                 <p class="text-gray-500">QR code unavailable — try creating a new payment.</p>
+            @endif
+
+            @if ($checkoutUrl)
+                <a href="{{ $checkoutUrl }}" target="_blank" rel="noopener noreferrer"
+                   class="inline-block mt-3 px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700">{{ __('Open payment page') }}</a>
             @endif
 
             <div class="mt-4 text-sm">

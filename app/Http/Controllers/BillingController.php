@@ -130,7 +130,13 @@ class BillingController extends Controller
         $data = $request->validate([
             'plan' => ['required', 'string', 'exists:plans,slug'],
             'cycle' => ['required', 'in:monthly,yearly'],
+            // Prepay 1 / 3 / 6 / 12 months of the monthly price. Absent = one month,
+            // which is exactly what every existing form and API caller sends, so the
+            // default keeps today's behaviour byte-for-byte.
+            'period' => ['nullable', 'integer', 'in:1,3,6,12'],
         ]);
+
+        $months = $data['cycle'] === 'yearly' ? 12 : max(1, (int) ($data['period'] ?? 1));
 
         $plan = Plan::where('slug', $data['plan'])->where('is_active', true)->firstOrFail();
         $tenant = $ctx->tenant();
@@ -161,6 +167,9 @@ class BillingController extends Controller
                     'invoice_id' => $active->invoice_id,
                     'plan' => $plan->slug,
                     'cycle' => $data['cycle'],
+                    // Carried through the modal so "cancel & create new" rebuilds the
+                    // exact intent the customer chose, period included.
+                    'period' => $months,
                     'amount' => $active->amount,
                 ],
             ]);
@@ -170,7 +179,7 @@ class BillingController extends Controller
         // A browser must not be able to activate a paid plan by appending ?trial=1.
         // Otherwise create invoice + QRIS payment.
         try {
-            $payment = $this->payments->createCheckout($tenant, $plan, $data['cycle'], $request->user());
+            $payment = $this->payments->createCheckout($tenant, $plan, $data['cycle'], $request->user(), $months);
         } catch (PaymentProviderException $e) {
             // The payment gateway refused or could not be reached. A gateway problem is
             // not an application crash: billing the customer with a 500 loses the
@@ -185,6 +194,7 @@ class BillingController extends Controller
                 'tenant_id' => $tenant->id,
                 'plan' => $plan->slug,
                 'cycle' => $data['cycle'],
+                'period' => $months,
                 'user_id' => $request->user()->id,
                 'category' => $e->category,
                 'exception' => $e::class,
@@ -218,8 +228,12 @@ class BillingController extends Controller
             'invoice_id' => ['required', 'integer', 'min:1'],
             'plan' => ['required', 'string', 'exists:plans,slug'],
             'cycle' => ['required', 'in:monthly,yearly'],
+            'period' => ['nullable', 'integer', 'in:1,3,6,12'],
             'intent' => ['required', 'in:continue,replace'],
         ]);
+
+        // Same rule as checkout: the modal carries the period the customer picked.
+        $months = $data['cycle'] === 'yearly' ? 12 : max(1, (int) ($data['period'] ?? 1));
 
         $tenant = $ctx->tenant();
 
@@ -278,12 +292,13 @@ class BillingController extends Controller
         }
 
         try {
-            $new = $this->payments->createCheckout($tenant, $plan, $data['cycle'], $request->user());
+            $new = $this->payments->createCheckout($tenant, $plan, $data['cycle'], $request->user(), $months);
         } catch (PaymentProviderException $e) {
             \Illuminate\Support\Facades\Log::error('billing.checkout.provider_failed', [
                 'tenant_id' => $tenant->id,
                 'plan' => $plan->slug,
                 'cycle' => $data['cycle'],
+                'period' => $months,
                 'user_id' => $request->user()->id,
                 'exception' => $e::class,
                 'message' => $e->getMessage(),

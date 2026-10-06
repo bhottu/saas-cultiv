@@ -140,6 +140,7 @@
                         <input type="hidden" name="invoice_id" value="{{ $pendingCheckout['invoice_id'] ?? '' }}">
                         <input type="hidden" name="plan" value="{{ $pendingCheckout['plan'] ?? '' }}">
                         <input type="hidden" name="cycle" value="{{ $pendingCheckout['cycle'] ?? 'monthly' }}">
+                        <input type="hidden" name="period" value="{{ $pendingCheckout['period'] ?? 1 }}">
                         <x-secondary-button type="submit">{{ __('Continue payment') }}</x-secondary-button>
                     </form>
 
@@ -150,6 +151,7 @@
                         <input type="hidden" name="invoice_id" value="{{ $pendingCheckout['invoice_id'] ?? '' }}">
                         <input type="hidden" name="plan" value="{{ $pendingCheckout['plan'] ?? '' }}">
                         <input type="hidden" name="cycle" value="{{ $pendingCheckout['cycle'] ?? 'monthly' }}">
+                        <input type="hidden" name="period" value="{{ $pendingCheckout['period'] ?? 1 }}">
                         <x-danger-button type="submit">{{ __('Cancel & create new') }}</x-danger-button>
                     </form>
                 </div>
@@ -157,6 +159,41 @@
         @endif
 
         {{-- Plans --}}
+        {{-- One shared Alpine scope drives the period selector AND every plan form:
+             the radios live outside the forms (they must not be submitted themselves)
+             and each form carries a hidden `period` bound to the same value, so a card
+             always posts exactly what the customer picked — with or without JS, since
+             the default of 1 month is a valid, complete request on its own. --}}
+        <div x-data="{ period: {{ (int) old('period', 1) }} }">
+            <div class="bg-white rounded-lg shadow p-5 mb-4">
+                <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
+                    <span class="text-sm font-semibold text-gray-700">{{ __('Payment period') }}</span>
+                    <div class="flex flex-wrap items-center gap-4">
+                        <label class="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
+                            <input type="radio" name="period" value="1" x-model.number="period"
+                                   class="text-indigo-600 focus:ring-indigo-500" aria-label="{{ __('Payment period') }}: {{ __('1 month') }}">
+                            <span>{{ __('1 month') }}</span>
+                        </label>
+                        <label class="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
+                            <input type="radio" name="period" value="3" x-model.number="period"
+                                   class="text-indigo-600 focus:ring-indigo-500">
+                            <span>{{ __('3 months') }}</span>
+                        </label>
+                        <label class="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
+                            <input type="radio" name="period" value="6" x-model.number="period"
+                                   class="text-indigo-600 focus:ring-indigo-500">
+                            <span>{{ __('6 months') }}</span>
+                        </label>
+                        <label class="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
+                            <input type="radio" name="period" value="12" x-model.number="period"
+                                   class="text-indigo-600 focus:ring-indigo-500">
+                            <span>{{ __('12 months') }}</span>
+                        </label>
+                    </div>
+                    <p class="text-xs text-gray-500">{{ __('Choose how many months to pay for at once. Longer periods cost the same per month.') }}</p>
+                </div>
+            </div>
+
         <div class="grid md:grid-cols-4 gap-4">
             @foreach ($plans as $plan)
                 <div class="bg-white rounded-lg shadow p-5 flex flex-col {{ $subscription?->plan_id === $plan->id ? 'ring-2 ring-indigo-500' : '' }}">
@@ -164,6 +201,14 @@
                     <p class="text-sm text-gray-500 mb-2">{{ $plan->description }}</p>
                     <div class="text-xl font-bold mb-1">
                         {{ \App\Services\Money::formatRupiah($plan->price_monthly) }}<span class="text-sm text-gray-500">/mo</span>
+                    </div>
+                    {{-- What the selected period costs in total. Server-rendered as the
+                         period=1 case so the page is truthful without JavaScript;
+                         Alpine only keeps it in step after a radio is clicked. --}}
+                    <div class="text-sm text-gray-600 mb-1" x-show="period > 1" x-cloak>
+                        <span class="font-semibold"
+                              x-text="'Rp ' + ({{ $plan->price_monthly }} * period).toLocaleString('id-ID')"></span>
+                        <span>{{ __('total for the period') }}</span>
                     </div>
                     {{-- Features + Modules come from one shared component so this page can
                          never disagree with the pricing page or /admin/plans. --}}
@@ -175,11 +220,13 @@
                             @csrf
                             <input type="hidden" name="plan" value="{{ $plan->slug }}">
                             <input type="hidden" name="cycle" value="monthly">
+                            <input type="hidden" name="period" :value="period">
                             <x-primary-button data-busy-label="{{ __('Processing payment…') }}">{{ $plan->price_monthly > 0 ? 'Subscribe' : 'Switch to Free' }}</x-primary-button>
                         </form>
                     @endif
                 </div>
             @endforeach
+        </div>
         </div>
 
         {{-- History --}}

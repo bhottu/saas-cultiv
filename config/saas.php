@@ -4,6 +4,15 @@
 return [
     'trial_days' => env('SAAS_TRIAL_DAYS', 14),
 
+    /*
+    | Which payment gateway NEW checkouts use when the admin has not picked one
+    | (payment_settings row absent or unreadable). The stored choice lives in the
+    | payment_settings table; this env value is only the boot-time fallback and the
+    | documented default, so an un-migrated database still behaves exactly like the
+    | single-gateway release did: QRIS.PW.
+    */
+    'default_payment_gateway' => env('PAYMENT_GATEWAY', 'qrispw'),
+
     // After subscription expiry, tenant data is retained this long before purge jobs run.
     'data_retention_days' => env('SAAS_DATA_RETENTION_DAYS', 30),
 

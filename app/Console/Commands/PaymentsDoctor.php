@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\PaymentSetting;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
@@ -69,6 +70,21 @@ class PaymentsDoctor extends Command
 
         $this->row('Create endpoint', (string) config('services.qrispw.endpoints.create'));
         $this->row('Status endpoint', (string) config('services.qrispw.endpoints.status'));
+
+        $this->line('');
+
+        // Kasera is optional: reported for visibility, never fatal. A QRIS.PW-only
+        // platform is a perfectly healthy configuration; these rows exist so an
+        // operator who DID select Kasera can see at a glance why it is not working.
+        $kaseraKey = trim((string) config('services.kasera.api_key'));
+
+        $this->row('Active gateway', PaymentSetting::activeGateway());
+        $this->row('KASERA_API_KEY', $kaseraKey === ''
+            ? 'not set (fine while QRIS.PW is active)'
+            : 'set (#'.substr(hash('sha256', $kaseraKey), 0, 8).', '.strlen($kaseraKey).' chars)');
+        $this->row('Kasera webhook', config('services.kasera.webhook_secret')
+            ? 'secret set'
+            : 'NO SECRET - Kasera deliveries would be rejected (403)');
 
         $this->line('');
 

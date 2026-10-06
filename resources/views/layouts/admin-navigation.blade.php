@@ -16,6 +16,7 @@
         ['label' => __('Inventory'), 'icon' => 'folder', 'href' => route('admin.inventory.index'), 'active' => request()->routeIs('admin.inventory.*')],
         ['label' => __('Subscriptions'), 'icon' => 'chart-bar', 'href' => route('admin.subscriptions.index'), 'active' => request()->routeIs('admin.subscriptions.*')],
         ['label' => __('Payments'), 'icon' => 'credit-card', 'href' => route('admin.payments.index'), 'active' => request()->routeIs('admin.payments.*')],
+        ['label' => __('Payment settings'), 'icon' => 'cog', 'href' => route('admin.billing.edit'), 'active' => request()->routeIs('admin.billing.*')],
         ['label' => __('Plans'), 'icon' => 'tag', 'href' => route('admin.plans.index'), 'active' => request()->routeIs('admin.plans.*')],
         ['label' => __('SEO'), 'icon' => 'globe', 'href' => route('admin.seo.edit'), 'active' => request()->routeIs('admin.seo.*')],
         ['label' => __('Audit Logs'), 'icon' => 'shield-check', 'href' => route('admin.audit-logs.index'), 'active' => request()->routeIs('admin.audit-logs.*')],
