@@ -26,6 +26,7 @@ class UsageService
         'api_access' => ['API Access', 'Business'],
         'audit_log' => ['Audit Log', 'Pro and Business'],
         'advanced_analytics' => ['Advanced Analytics', 'Pro and Business'],
+        'cultiv_ai' => ['AI Assistant Telegram', ''],
     ];
 
     public function record(Tenant $tenant, string $metric, int $amount = 1): void
@@ -38,6 +39,34 @@ class UsageService
         );
 
         $row->increment('value', $amount);
+    }
+
+    /** Atomically apply a metered AI request against its workspace plan quota. */
+    public function consume(Tenant $tenant, string $metric, int $amount = 1): void
+    {
+        DB::transaction(function () use ($tenant, $metric, $amount): void {
+            $lockedTenant = Tenant::query()->lockForUpdate()->findOrFail($tenant->id);
+            $plan = $this->planFor($lockedTenant);
+            $limit = $plan?->limit($metric);
+            $current = $this->usage($lockedTenant, $metric);
+
+            if ($limit !== null && $current + $amount > $limit) {
+                throw new SubscriptionLimitException(
+                    resource: $this->resourceLabel($metric),
+                    current: $current,
+                    limit: $limit,
+                    planName: $plan?->name ?? 'Free',
+                    field: $metric,
+                );
+            }
+
+            [$start, $end] = $this->period($metric);
+            $row = \App\Models\UsageRecord::withoutGlobalScopes()->firstOrCreate(
+                ['tenant_id' => $lockedTenant->id, 'metric' => $metric, 'period_start' => $start],
+                ['period_end' => $end]
+            );
+            $row->increment('value', $amount);
+        });
     }
 
     public function usage(Tenant $tenant, string $metric): int
@@ -160,6 +189,29 @@ class UsageService
     /** The plans that include $feature — for "Available on …" lock hints in the UI. */
     public function featurePlans(string $feature): string
     {
+        $plans = Plan::active()->get()
+            ->filter(fn (Plan $plan) => $plan->allows($feature))
+            ->pluck('name');
+
+        if ($plans->isNotEmpty()) {
+            $names = $plans->values();
+            $last = $names->pop();
+
+            if ($names->isEmpty()) {
+                return $last;
+            }
+
+            if ($names->count() === 1) {
+                return __(':first and :last', ['first' => $names->first(), 'last' => $last]);
+            }
+
+            return __(':list, and :last', ['list' => $names->implode(', '), 'last' => $last]);
+        }
+
+        if (isset(self::FEATURE_LABELS[$feature]) && self::FEATURE_LABELS[$feature][1] === '') {
+            return __('No active plans currently include this feature.');
+        }
+
         return self::FEATURE_LABELS[$feature][1] ?? 'Pro and Business';
     }
 

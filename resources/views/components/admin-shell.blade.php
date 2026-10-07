@@ -26,13 +26,13 @@
         </div>
     </x-slot>
 
-    <div class="py-12">
-        <div class="grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
-            <div class="lg:sticky lg:top-24 lg:self-start">
+    <div class="mx-auto w-full max-w-screen-2xl px-0 py-6 sm:px-6 sm:py-8 lg:px-8">
+        <div class="grid gap-8 lg:grid-cols-[18rem_minmax(0,1fr)]">
+            <div class="min-w-0 lg:sticky lg:top-[5.5rem] lg:self-start">
                 @include('layouts.admin-navigation')
             </div>
 
-            <div class="min-w-0 space-y-6">
+            <div class="min-w-0 space-y-8">
                 @if (session('status'))
                     @php $status = session('status'); @endphp
                     <div role="alert"

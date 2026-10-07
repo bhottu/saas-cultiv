@@ -46,6 +46,7 @@ class ModulesController extends Controller
     public function show(Module $module): View
     {
         $this->auth->authorize('modules.view');
+        abort_if($module->availability_status === Module::STATUS_HIDDEN, 404);
         $tenant = $this->ctx->tenant();
 
         return view('modules.show', [
@@ -73,7 +74,11 @@ class ModulesController extends Controller
             ]);
         }
 
-        $install = $this->manager->record($module, $tenant);
+        try {
+            $install = $this->manager->record($module, $tenant);
+        } catch (\RuntimeException $e) {
+            return back()->with('status', ['type' => 'error', 'message' => $e->getMessage()]);
+        }
 
         AuditLogger::log('module.installed', $install, [
             'module_key'  => $module->key,
@@ -102,7 +107,11 @@ class ModulesController extends Controller
             ]);
         }
 
-        $install = $this->manager->activate($module, $tenant);
+        try {
+            $install = $this->manager->activate($module, $tenant);
+        } catch (\RuntimeException $e) {
+            return back()->with('status', ['type' => 'error', 'message' => $e->getMessage()]);
+        }
 
         AuditLogger::log('module.activated', $install, [
             'module_key'  => $module->key,

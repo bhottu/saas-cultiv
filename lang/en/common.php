@@ -11,6 +11,8 @@
  */
 
 return [
+    ':first and :last' => ':first and :last',
+    ':list, and :last' => ':list, and :last',
     'API tokens' => 'API tokens',
     'About :field' => 'About :field',
     'Accept' => 'Accept',

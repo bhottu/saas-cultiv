@@ -40,6 +40,7 @@ return [
     'module' => [
         'POS'                => 'POS',
         'Point of Sale (POS)' => 'Point of Sale (POS)',
+        'AI Assistant Telegram' => 'AI Assistant Telegram',
     ],
 
     // Sale::STATUSES

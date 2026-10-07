@@ -26,6 +26,7 @@ return [
         'max_customers' => ['period' => 'forever', 'fallback' => null],
         'storage_mb'    => ['period' => 'forever', 'fallback' => 100],
         'api_calls'     => ['period' => 'month',   'fallback' => 1000],
+        'ai_messages'   => ['period' => 'month',   'fallback' => null],
     ],
 
     /*
@@ -49,6 +50,7 @@ return [
         'max_customers',
         'max_storage_mb',
         'max_api_calls',
+        'max_ai_messages',
 
         // Capability switches read through Plan::allows().
         'basic_sales',
@@ -60,6 +62,7 @@ return [
         'advanced_analytics',
         'api_access',
         'audit_log',
+        'cultiv_ai',
     ],
 
     // Feature switches that remove a whole surface by not registering its routes.

@@ -18,12 +18,14 @@
         ['label' => __('Payments'), 'icon' => 'credit-card', 'href' => route('admin.payments.index'), 'active' => request()->routeIs('admin.payments.*')],
         ['label' => __('Payment settings'), 'icon' => 'cog', 'href' => route('admin.billing.edit'), 'active' => request()->routeIs('admin.billing.*')],
         ['label' => __('Plans'), 'icon' => 'tag', 'href' => route('admin.plans.index'), 'active' => request()->routeIs('admin.plans.*')],
+        ['label' => __('Module management'), 'icon' => 'cube', 'href' => route('admin.modules.index'), 'active' => request()->routeIs('admin.modules.*')],
+        ['label' => __('AI Assistant'), 'icon' => 'sparkles', 'href' => route('admin.ai.edit'), 'active' => request()->routeIs('admin.ai.*')],
         ['label' => __('SEO'), 'icon' => 'globe', 'href' => route('admin.seo.edit'), 'active' => request()->routeIs('admin.seo.*')],
         ['label' => __('Audit Logs'), 'icon' => 'shield-check', 'href' => route('admin.audit-logs.index'), 'active' => request()->routeIs('admin.audit-logs.*')],
     ];
 @endphp
 
-<nav aria-label="{{ __('Platform admin') }}" class="rounded-lg bg-white p-2 shadow">
+<nav aria-label="{{ __('Platform admin') }}" tabindex="0" class="h-[calc(100dvh-5.5rem)] overflow-y-scroll overflow-x-hidden overscroll-y-contain rounded-lg bg-white p-2 shadow">
     <ul class="space-y-0.5">
         @foreach ($adminNav as $item)
             <li>
@@ -31,8 +33,8 @@
                    @if ($item['active']) aria-current="page" @endif
                    class="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium
                           {{ $item['active'] ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50' }}">
-                    <x-nav-icon :name="$item['icon']" class="h-4 w-4" />
-                    <span class="truncate">{{ $item['label'] }}</span>
+                    <x-nav-icon :name="$item['icon']" class="h-4 w-4 shrink-0" />
+                    <span>{{ $item['label'] }}</span>
                 </a>
             </li>
         @endforeach

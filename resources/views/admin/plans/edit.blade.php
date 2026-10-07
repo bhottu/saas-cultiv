@@ -3,15 +3,17 @@
     // (a number, or blank for unlimited) and capabilities (on/off). Flattening them into
     // one undifferentiated list of inputs is how an admin ends up unsure whether a field
     // wants 15 or true.
-    $numericKeys = ['max_workspaces', 'max_users', 'max_products', 'max_customers', 'max_storage_mb', 'max_api_calls'];
-    $flagKeys = ['basic_sales', 'basic_stock', 'basic_purchases', 'basic_reports', 'advanced_reports', 'advanced_permissions', 'advanced_analytics', 'api_access', 'audit_log'];
+    $numericKeys = ['max_workspaces', 'max_users', 'max_products', 'max_customers', 'max_storage_mb', 'max_api_calls', 'max_ai_messages'];
+    $flagKeys = ['basic_sales', 'basic_stock', 'basic_purchases', 'basic_reports', 'advanced_reports', 'advanced_permissions', 'advanced_analytics', 'api_access', 'audit_log', 'cultiv_ai'];
     $labels = [
         'max_workspaces' => __('Workspaces'), 'max_users' => __('Users'), 'max_products' => __('Products'),
         'max_customers' => __('Customers'), 'max_storage_mb' => __('Storage (MB)'), 'max_api_calls' => __('API calls per month'),
+        'max_ai_messages' => __('AI messages per month'),
         'basic_sales' => __('Sales'), 'basic_stock' => __('Inventory'), 'basic_purchases' => __('Purchasing'),
         'basic_reports' => __('Standard reports'), 'advanced_reports' => __('Advanced reports'),
         'advanced_permissions' => __('Advanced permissions'), 'advanced_analytics' => __('Advanced analytics'),
         'api_access' => __('API access'), 'audit_log' => __('Audit log'),
+        'cultiv_ai' => __('AI Assistant Telegram'),
     ];
     // Only render what this plan actually carries, so the form never invents a limit the
     // plan never had and never hides one it does.
@@ -27,7 +29,7 @@
 
         {{-- Identity. The slug is shown but not editable: it is the key billing and the
              module gate resolve a plan by, so renaming it would break live checkouts. --}}
-        <section class="rounded-lg bg-white p-6 shadow">
+        <section class="admin-card p-5 sm:p-6">
             <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-700">{{ __('Plan') }}</h3>
 
             <div class="mt-5 grid gap-5 md:grid-cols-2">
@@ -57,7 +59,7 @@
         </section>
 
         {{-- ------------------------------------------------------- Pricing --}}
-        <section class="rounded-lg bg-white p-6 shadow">
+        <section class="admin-card p-5 sm:p-6">
             <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-700">{{ __('Pricing') }}</h3>
             <p class="mt-1 text-sm text-gray-500">
                 {{ __('Enter plain numbers. They are formatted for display automatically.') }}
@@ -94,7 +96,7 @@
         </section>
 
         {{-- ------------------------------------------------------------------ Multi-period --}}
-        <section class="rounded-lg bg-white p-6 shadow">
+        <section class="admin-card p-5 sm:p-6">
             <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-700">{{ __('Multi-period Prices') }}</h3>
             <p class="mt-1 text-sm text-gray-500">
                 {{ __('Per-period prices replace the monthly x months calculation for the selected period.') }}
@@ -149,7 +151,7 @@
         </section>
 
         {{-- ------------------------------------------------ Limits & capabilities --}}
-        <section class="rounded-lg bg-white p-6 shadow">
+        <section class="admin-card p-5 sm:p-6">
             <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-700">{{ __('Limits & Capabilities') }}</h3>
             <p class="mt-1 text-sm text-gray-500">
                 {{ __('Leave a limit blank for unlimited. These decide what workspaces on this plan can actually do.') }}
@@ -159,13 +161,13 @@
                 <h4 class="text-sm font-medium text-gray-900">{{ __('Limits') }}</h4>
                 <div class="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     @foreach ($numericKeys as $key)
-                        @if (array_key_exists($key, $current))
+                        @if (array_key_exists($key, $current) || $key === 'max_ai_messages')
                             <div>
                                 <x-input-label :for="'entitlement-'.$key" :value="$labels[$key]" />
                                 <x-text-input :id="'entitlement-'.$key" :name="'entitlements['.$key.']'"
                                               type="number" inputmode="numeric" min="0" step="1"
                                               class="mt-1 block w-full"
-                                              :value="old('entitlements.'.$key, $current[$key])"
+                                              :value="old('entitlements.'.$key, $current[$key] ?? null)"
                                               placeholder="{{ __('Unlimited') }}" />
                             </div>
                         @endif
@@ -177,14 +179,14 @@
                 <h4 class="text-sm font-medium text-gray-900">{{ __('Capabilities') }}</h4>
                 <div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     @foreach ($flagKeys as $key)
-                        @if (array_key_exists($key, $current))
+                        @if (array_key_exists($key, $current) || $key === 'cultiv_ai')
                             {{-- A hidden input paired with the checkbox: an unticked box is
                                  absent from the payload, and mergeEntitlements() keeps the
                                  stored value for any key it does not receive. --}}
                             <label class="flex items-center gap-2 text-sm text-gray-700">
                                 <input type="hidden" name="entitlements[{{ $key }}]" value="0">
                                 <input type="checkbox" name="entitlements[{{ $key }}]" value="1"
-                                       @checked(old('entitlements.'.$key, (bool) $current[$key]))
+                                       @checked(old('entitlements.'.$key, (bool) ($current[$key] ?? false)))
                                        class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                                 {{ $labels[$key] }}
                             </label>
@@ -195,7 +197,7 @@
         </section>
 
         {{-- ------------------------------------------------------ Availability --}}
-        <section class="rounded-lg bg-white p-6 shadow">
+        <section class="admin-card p-5 sm:p-6">
             <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-700">{{ __('Availability') }}</h3>
 
             <div class="mt-4 space-y-3">

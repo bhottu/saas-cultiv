@@ -251,6 +251,10 @@ class PlatformAdminTest extends TestCase
         $this->assertStringContainsString('id="sidebar"', $html);
         $this->assertStringContainsString(route('admin.users.index'), $html);
         $this->assertStringContainsString(route('admin.audit-logs.index'), $html);
+        $this->assertStringContainsString('h-[calc(100dvh-5.5rem)] overflow-y-scroll overflow-x-hidden overscroll-y-contain', $html);
+        $this->assertStringContainsString('aria-label="Platform admin" tabindex="0"', $html);
+        $this->assertStringContainsString('<ul class="space-y-0.5">', $html);
+        $this->assertStringNotContainsString('flex w-full flex-nowrap gap-1 overflow-x-auto', $html);
     }
 
     public function test_admin_navigation_is_hidden_from_normal_users(): void

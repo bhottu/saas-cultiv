@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+    .admin-card {
+        @apply rounded-xl border border-gray-200 bg-white shadow-sm;
+    }
+}
+
+.admin-table th,
+.admin-table td {
+    padding: 0.875rem 1rem;
+}
+
 /*
  * Alpine's cloak: hide an element until Alpine has initialised it.
  *

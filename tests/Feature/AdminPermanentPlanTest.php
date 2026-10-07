@@ -147,7 +147,7 @@ class AdminPermanentPlanTest extends TestCase
 
         // The shipped catalogue declares no min_plan gates at all, so one is created
         // here to exercise the gate rather than asserting nothing.
-        $module = Module::query()->firstOrFail();
+        $module = Module::query()->where('key', 'pos')->firstOrFail();
         $module->update(['min_plan' => 'pro']);
 
         // A plain member on Starter is below the gate.
@@ -168,7 +168,7 @@ class AdminPermanentPlanTest extends TestCase
     public function test_an_admin_workspace_passes_every_module_gate_without_one(): void
     {
         $modules = app(ModuleManager::class);
-        $module = Module::query()->firstOrFail();
+        $module = Module::query()->where('key', 'pos')->firstOrFail();
         $module->update(['min_plan' => 'pro']);
 
         $this->addMember($this->workspace, $this->admin);

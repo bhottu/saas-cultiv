@@ -114,6 +114,7 @@ class Plan extends Model
             'products_count' => 'max_products',
             'customers_count' => 'max_customers',
             'api_calls' => 'max_api_calls',
+            'ai_messages' => 'max_ai_messages',
             'storage_mb' => 'max_storage_mb',
         ];
         $key = $aliases[$metric] ?? $metric;
@@ -129,6 +130,7 @@ class Plan extends Model
         $fallbackMetric = match ($key) {
             'max_storage_mb' => 'storage_mb',
             'max_api_calls' => 'api_calls',
+            'max_ai_messages' => 'ai_messages',
             default => $key,
         };
         $fallback = config("saas.usage.{$fallbackMetric}.fallback");

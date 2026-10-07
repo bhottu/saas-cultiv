@@ -24,7 +24,7 @@
             </div>
         @endif
 
-        <section class="rounded-lg bg-white p-6 shadow">
+        <section class="admin-card p-5 sm:p-6">
             <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-700">{{ __('Active gateway') }}</h3>
             <p class="mt-1 text-sm text-gray-500">
                 {{ __('New checkouts are sent to the selected gateway until you change it here.') }}

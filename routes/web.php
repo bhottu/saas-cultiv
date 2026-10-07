@@ -224,6 +224,9 @@ Route::resource('expense-categories', ExpenseCategoriesController::class)
         Route::post('/modules/{module:slug}/activate', [ModulesController::class, 'activate'])->name('modules.activate');
         Route::post('/modules/{module:slug}/deactivate', [ModulesController::class, 'deactivate'])->name('modules.deactivate');
         Route::delete('/modules/{module:slug}/uninstall', [ModulesController::class, 'uninstall'])->name('modules.uninstall');
+        Route::get('/settings/ai-channel', [\App\Http\Controllers\AiChannelController::class, 'edit'])->name('ai.channel.edit');
+        Route::post('/settings/ai-channel/link-code', [\App\Http\Controllers\AiChannelController::class, 'createLinkCode'])->name('ai.channel.link-code');
+        Route::delete('/settings/ai-channel', [\App\Http\Controllers\AiChannelController::class, 'unlink'])->name('ai.channel.unlink');
 
         // POS Module (Availability gated by module:pos, access gated by sales.create)
         Route::middleware('module:pos')->prefix('pos')->name('pos.')->group(function () {
@@ -259,6 +262,12 @@ Route::middleware(['auth', 'verified', 'platform.admin'])->prefix('admin')->grou
     Route::get('/plans', [\App\Http\Controllers\Admin\PlanController::class, 'index'])->name('admin.plans.index');
     Route::get('/plans/{plan}/edit', [\App\Http\Controllers\Admin\PlanController::class, 'edit'])->name('admin.plans.edit');
     Route::put('/plans/{plan}', [\App\Http\Controllers\Admin\PlanController::class, 'update'])->name('admin.plans.update');
+    Route::get('/modules', [\App\Http\Controllers\Admin\ModuleCatalogController::class, 'index'])->name('admin.modules.index');
+    Route::put('/modules/{module:slug}', [\App\Http\Controllers\Admin\ModuleCatalogController::class, 'update'])->name('admin.modules.update');
+    Route::get('/ai', [\App\Http\Controllers\Admin\AiSettingsController::class, 'edit'])->name('admin.ai.edit');
+    Route::put('/ai', [\App\Http\Controllers\Admin\AiSettingsController::class, 'update'])->name('admin.ai.update');
+    Route::post('/ai/test', [\App\Http\Controllers\Admin\AiSettingsController::class, 'testProvider'])->name('admin.ai.test');
+    Route::post('/ai/telegram-webhook', [\App\Http\Controllers\Admin\AiSettingsController::class, 'registerTelegramWebhook'])->name('admin.ai.telegram-webhook');
 
     // Platform gateway selection (QRIS.PW / Kasera Pay). Kept separate from /plans
     // because it is a provider switch, not billing content: one radio, one audit line.
@@ -318,4 +327,3 @@ Route::middleware('auth')->group(function () {
 
 require __DIR__.'/auth.php';
 require __DIR__.'/api.php';
-

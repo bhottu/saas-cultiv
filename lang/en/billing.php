@@ -11,6 +11,12 @@
  */
 
 return [
+    'Downgrade to Free?' => 'Downgrade to Free?',
+    'Are you sure you want to downgrade to the Free plan? Features available only on paid plans may no longer be accessible.' => 'Are you sure you want to downgrade to the Free plan? Features available only on paid plans may no longer be accessible.',
+    'Confirm downgrade' => 'Confirm downgrade',
+    'Downgrade to Free' => 'Downgrade to Free',
+    'Switch to Free' => 'Switch to Free',
+    'Subscribe' => 'Subscribe',
     'Payment' => 'Payment',
     'Payment successful' => 'Payment successful',
     'Your payment was successful.' => 'Your payment was successful.',

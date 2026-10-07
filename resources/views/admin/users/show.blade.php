@@ -1,5 +1,5 @@
 <x-admin-shell :title="$user->name" :subtitle="$user->email">
-    <div class="rounded-lg bg-white p-6 shadow">
+    <div class="admin-card p-5 sm:p-6">
         <h3 class="mb-4 font-semibold text-gray-900">{{ __('Account') }}</h3>
         <dl class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
@@ -67,7 +67,7 @@
         </tbody>
     </x-admin-table>
 
-    <div class="rounded-lg bg-white p-6 shadow">
+    <div class="admin-card p-5 sm:p-6">
         <h3 class="mb-3 font-semibold text-gray-900">{{ __('Recent activity') }}</h3>
         <ul class="space-y-1 text-sm">
             @forelse ($activity as $log)

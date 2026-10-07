@@ -1,23 +1,130 @@
-/.phpunit.cache
-/node_modules
-/public/build
-/public/hot
-/public/storage
-/storage/*.key
-/storage/pail
-/vendor
+
+# ============================================================
+# Cultiv One — Laravel / PHP
+# ============================================================
+
+# ------------------------------------------------------------
+# Environment / Secrets
+# ------------------------------------------------------------
 .env
 .env.backup
 .env.production
+.env.production.local
+.env.local
+.env.*.local
+
+# ------------------------------------------------------------
+# Dependencies
+# ------------------------------------------------------------
+/vendor/
+/node_modules/
+
+# ------------------------------------------------------------
+# Laravel Build / Frontend
+# ------------------------------------------------------------
+/public/build/
+/public/hot/
+/public/storage/
+
+# ------------------------------------------------------------
+# Laravel Storage / Runtime
+# ------------------------------------------------------------
+/storage/*.key
+/storage/pail
+
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/testing/*
+/storage/framework/views/*
+
+/storage/logs/*
+/storage/app/private/*
+/storage/app/public/*
+
+# Keep required storage directory structure
+!.gitignore
+
+# ------------------------------------------------------------
+# Laravel Runtime / Cache
+# ------------------------------------------------------------
+/bootstrap/cache/*
+/bootstrap/cache/*.php
+
+# ------------------------------------------------------------
+# PHPUnit / Testing
+# ------------------------------------------------------------
+/.phpunit.cache
+.phpunit.result.cache
+
+# ------------------------------------------------------------
+# PHP / Laravel Development Tools
+# ------------------------------------------------------------
 .phpactor.json
 .phpunit.result.cache
+
+# ------------------------------------------------------------
+# Temporary Development Files
+# ------------------------------------------------------------
+tmp-*
+tmp_*
+*.tmp
+*.temp
+
+# Temporary scripts that may be created during debugging
+tmp*.php
+tmp*.py
+tmp*.js
+tmp*.sh
+
+# ------------------------------------------------------------
+# Logs
+# ------------------------------------------------------------
+*.log
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# ------------------------------------------------------------
+# OS Generated Files
+# ------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ------------------------------------------------------------
+# IDE / Editors
+# ------------------------------------------------------------
+/.idea/
+/.fleet/
+/.nova/
+/.vscode/
+/.zed/
+
+# ------------------------------------------------------------
+# Laravel Homestead
+# ------------------------------------------------------------
 Homestead.json
 Homestead.yaml
-npm-debug.log
-yarn-error.log
+
+# ------------------------------------------------------------
+# Composer Authentication
+# ------------------------------------------------------------
 /auth.json
-/.fleet
-/.idea
-/.nova
-/.vscode
-/.zed
+
+# ------------------------------------------------------------
+# Local Development / Debug
+# ------------------------------------------------------------
+*.local
+
+# ------------------------------------------------------------
+# Coverage / Profiling
+# ------------------------------------------------------------
+/coverage/
+/clover.xml
+
+# Xdebug profiler output
+cachegrind.out.*
+
+/docs
+

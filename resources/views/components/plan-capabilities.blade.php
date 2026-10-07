@@ -76,11 +76,15 @@
 
     $features = array_merge($headline, $included, $extra);
 
-    // Modules available on this plan. A module with no min_plan is available to
-    // everyone (this is the case for POS today); a gated module is only listed when
-    // this plan's tier is high enough — the same comparison ModuleManager uses.
+    // Only advertise modules this plan can actually install. Module feature
+    // entitlements are distinct from workspace installation state.
     $availableModules = \App\Models\Module::query()->available()->ordered()->get()
         ->filter(function (\App\Models\Module $module) use ($plan) {
+            $planFeature = config("modules.manifests.{$module->key}.plan_feature");
+            if ($planFeature && ! $plan->allows($planFeature)) {
+                return false;
+            }
+
             if (! $module->min_plan) {
                 return true;
             }

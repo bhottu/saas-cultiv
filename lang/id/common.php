@@ -9,6 +9,8 @@
 */
 
 return [
+    ':first and :last' => ':first dan :last',
+    ':list, and :last' => ':list, dan :last',
     'API tokens' => 'Token API',
     'About :field' => 'Tentang :field',
     'Accept' => 'Terima',

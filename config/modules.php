@@ -33,6 +33,25 @@ return [
             'sidebar_group'  => 'Sales',
             'sort_order'     => 10,
         ],
+        'ai_agent' => [
+            'key'            => 'ai_agent',
+            'name'           => 'AI Assistant Telegram',
+            'slug'           => 'ai-agent',
+            'description'    => 'Manage your workspace through Telegram with help from AI.',
+            'icon'           => 'sparkles',
+            'version'        => '1.0.0',
+            'category'       => 'operations',
+            'is_core'        => false,
+            'is_paid'        => false,
+            'price_monthly'  => 0,
+            'price_yearly'   => 0,
+            'currency'       => 'IDR',
+            'min_plan'       => null,
+            'route'          => 'ai.channel.edit',
+            'permission'     => null,
+            'sidebar_group'  => null,
+            'sort_order'     => 20,
+        ],
     ],
 
     /*
@@ -48,6 +67,12 @@ return [
             'icon'          => 'shopping-cart',
             'permission'    => 'sales.create',
             'sidebar_group' => 'Sales',
+        ],
+        'ai_agent' => [
+            'name'         => 'AI Assistant Telegram',
+            'route'        => 'ai.channel.edit',
+            'plan_feature' => 'cultiv_ai',
+            'icon'         => 'sparkles',
         ],
     ],
 ];

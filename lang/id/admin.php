@@ -9,6 +9,16 @@
 */
 
 return [
+    '1-month Price' => 'Harga 1 bulan',
+    '3-month Price' => 'Harga 3 bulan',
+    '6-month Price' => 'Harga 6 bulan',
+    '12-month Price' => 'Harga 12 bulan',
+    'Leave blank to fall back to monthly x 1.' => 'Kosongkan untuk menggunakan harga bulanan x 1.',
+    'Leave blank to fall back to monthly x 3.' => 'Kosongkan untuk menggunakan harga bulanan x 3.',
+    'Leave blank to fall back to monthly x 6.' => 'Kosongkan untuk menggunakan harga bulanan x 6.',
+    'Leave blank to fall back to monthly x 12.' => 'Kosongkan untuk menggunakan harga bulanan x 12.',
+    'Multi-period Prices' => 'Harga Beberapa Periode',
+    'Per-period prices replace the monthly x months calculation for the selected period.' => 'Harga per periode menggantikan perhitungan harga bulanan dikali jumlah bulan yang dipilih.',
     ':count workspace(s) currently use this plan. Deactivating it stops new purchases but does not change existing subscriptions.' => ':count workspace saat ini memakai paket ini. Menonaktifkannya menghentikan pembelian baru, tetapi tidak mengubah langganan yang sudah ada.',
     'Actions' => 'Tindakan',
     'Active' => 'Aktif',

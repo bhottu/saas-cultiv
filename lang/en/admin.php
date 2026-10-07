@@ -11,6 +11,16 @@
  */
 
 return [
+    '1-month Price' => '1-month Price',
+    '3-month Price' => '3-month Price',
+    '6-month Price' => '6-month Price',
+    '12-month Price' => '12-month Price',
+    'Leave blank to fall back to monthly x 1.' => 'Leave blank to fall back to monthly x 1.',
+    'Leave blank to fall back to monthly x 3.' => 'Leave blank to fall back to monthly x 3.',
+    'Leave blank to fall back to monthly x 6.' => 'Leave blank to fall back to monthly x 6.',
+    'Leave blank to fall back to monthly x 12.' => 'Leave blank to fall back to monthly x 12.',
+    'Multi-period Prices' => 'Multi-period Prices',
+    'Per-period prices replace the monthly x months calculation for the selected period.' => 'Per-period prices replace the monthly x months calculation for the selected period.',
     ':count workspace(s) currently use this plan. Deactivating it stops new purchases but does not change existing subscriptions.' => ':count workspace(s) currently use this plan. Deactivating it stops new purchases but does not change existing subscriptions.',
     'Actions' => 'Actions',
     'Active' => 'Active',

@@ -14,6 +14,10 @@ Route::post('/webhooks/kasera', [WebhookController::class, 'kasera'])
     ->middleware('throttle:webhook')
     ->name('webhooks.kasera');
 
+Route::post('/ai/telegram/webhook', \App\Http\Controllers\AiTelegramWebhookController::class)
+    ->middleware('throttle:webhook')
+    ->name('ai.telegram.webhook');
+
 // Versioned API (Sanctum personal access tokens).
 Route::prefix('v1')->middleware(['auth:sanctum', 'tenant', 'plan.feature:api_access', 'throttle:api'])->group(function () {
     Route::get('/me', fn (\Illuminate\Http\Request $r) => response()->json([
@@ -31,7 +35,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'tenant', 'plan.feature:api_acc
 
         return response()->json([
             'tenant' => $ctx->tenant()->name,
-            'metrics' => collect(['max_users', 'api_calls', 'storage_mb'])->mapWithKeys(fn ($m) => [
+            'metrics' => collect(['max_users', 'api_calls', 'storage_mb', 'ai_messages'])->mapWithKeys(fn ($m) => [
                 $m => ['used' => $usage->usage($ctx->tenant(), $m), 'limit' => $usage->limit($ctx->tenant(), $m)],
             ]),
         ]);

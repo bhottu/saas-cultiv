@@ -18,7 +18,7 @@
         @method('PUT')
 
         {{-- ------------------------------------------------------- General SEO --}}
-        <section class="rounded-lg bg-white p-6 shadow">
+        <section class="admin-card p-5 sm:p-6">
             <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-700">{{ __('General SEO') }}</h3>
             <p class="mt-1 text-sm text-gray-500">
                 {{ __('Used by every page that does not declare its own title or description.') }}
@@ -74,7 +74,7 @@
         </section>
 
         {{-- ------------------------------------------------------- Open Graph --}}
-        <section class="rounded-lg bg-white p-6 shadow">
+        <section class="admin-card p-5 sm:p-6">
             <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-700">{{ __('Open Graph') }}</h3>
             <p class="mt-1 text-sm text-gray-500">
                 {{ __('How a shared link looks in WhatsApp, Facebook and Slack.') }}
@@ -114,7 +114,7 @@
                 </div>
 
                 {{-- --------------------------------------------- Favicon & share images --}}
-        <section class="rounded-lg bg-white p-6 shadow">
+        <section class="admin-card p-5 sm:p-6">
             <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-700">{{ __('Favicon & Images') }}</h3>
             <p class="mt-1 text-sm text-gray-500">
                 {{ __('PNG, JPG, ICO or WEBP. Leave a field empty to keep using the built-in file.') }}
@@ -175,7 +175,7 @@
         </section>
 
         {{-- ------------------------------------------------------- Twitter / X --}}
-        <section class="rounded-lg bg-white p-6 shadow">
+        <section class="admin-card p-5 sm:p-6">
             <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-700">{{ __('X / Twitter Card') }}</h3>
             <p class="mt-1 text-sm text-gray-500">
                 {{ __('How a shared link looks on X. Leave blank to reuse the Open Graph text.') }}
@@ -221,7 +221,7 @@
         </section>
 
         {{-- ------------------------------------------------------ Robots --}}
-        <section class="rounded-lg bg-white p-6 shadow">
+        <section class="admin-card p-5 sm:p-6">
             <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-700">{{ __('Robots / Indexing') }}</h3>
 
             <label class="mt-4 flex items-start gap-3">

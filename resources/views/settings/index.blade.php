@@ -72,6 +72,11 @@
                             {{ __('Go to profile') }}
                         </a>
                     </p>
+                    @if (app('tenant.context')->tenant() && app(\App\Services\ModuleManager::class)->active('ai_agent'))
+                        <p class="mt-4 text-sm text-gray-600">
+                            <a href="{{ route('ai.channel.edit') }}" class="font-medium text-indigo-600 hover:underline">{{ __('Connect a Telegram account to AI Assistant') }}</a>
+                        </p>
+                    @endif
                 </div>
 
             {{-- --------------------------------------------------------- Language --}}

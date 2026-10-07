@@ -37,7 +37,7 @@ class ModuleManager
     /** The whole catalogue, ordered. Inactive modules are included for completeness. */
     public function catalog(): Collection
     {
-        return Module::query()->ordered()->get();
+        return Module::query()->visibleToWorkspaces()->ordered()->get();
     }
 
     /** Modules the marketplace may offer right now. */
@@ -108,7 +108,18 @@ class ModuleManager
     /** Active = installed AND switched on. This is what the route middleware enforces. */
     public function active(string $key, ?Tenant $tenant = null): bool
     {
-        return $this->installs($tenant)->get($key)?->isActive() ?? false;
+        $tenant ??= $this->ctx->tenant();
+        if (! $tenant) {
+            return false;
+        }
+
+        $module = $this->find($key);
+
+        return $module !== null
+            && $module->availability_status === Module::STATUS_ACTIVE
+            && (bool) $module->is_active
+            && ($this->installs($tenant)->get($key)?->isActive() ?? false)
+            && $this->planGate($module, $tenant) === null;
     }
 
     public function status(string $key, ?Tenant $tenant = null): ?string
@@ -127,6 +138,8 @@ class ModuleManager
     public function record(Module $module, ?Tenant $tenant = null): TenantModule
     {
         $tenant = $this->requireTenant($tenant);
+        $this->assertPlatformAvailable($module);
+        $this->assertPlanAvailable($module, $tenant);
 
         $install = TenantModule::query()
             ->where('tenant_id', $tenant->id)
@@ -149,6 +162,8 @@ class ModuleManager
     public function activate(Module $module, ?Tenant $tenant = null): TenantModule
     {
         $tenant = $this->requireTenant($tenant);
+        $this->assertPlatformAvailable($module);
+        $this->assertPlanAvailable($module, $tenant);
         $install = $this->record($module, $tenant);
 
         if (! $install->isActive()) {
@@ -172,7 +187,13 @@ class ModuleManager
             throw new \RuntimeException(__('Core modules cannot be deactivated.'));
         }
 
-        $install = $this->record($module, $tenant);
+        $install = TenantModule::query()
+            ->where('tenant_id', $tenant->id)
+            ->where('module_id', $module->id)
+            ->first();
+        if (! $install) {
+            throw new \RuntimeException(__('This module is not installed in the workspace.'));
+        }
 
         $install->forceFill([
             'status'         => TenantModule::STATUS_INACTIVE,
@@ -215,6 +236,24 @@ class ModuleManager
         return $tenant;
     }
 
+    private function assertPlatformAvailable(Module $module): void
+    {
+        if ($module->availability_status === Module::STATUS_MAINTENANCE) {
+            throw new \RuntimeException(__('This module is temporarily under maintenance.'));
+        }
+
+        if ($module->availability_status !== Module::STATUS_ACTIVE || ! $module->is_active) {
+            throw new \RuntimeException(__('This module is not available.'));
+        }
+    }
+
+    private function assertPlanAvailable(Module $module, Tenant $tenant): void
+    {
+        if ($reason = $this->planGate($module, $tenant)) {
+            throw new \RuntimeException($reason);
+        }
+    }
+
     // ------------------------------------------------------------------ gates
 
     /**
@@ -225,13 +264,24 @@ class ModuleManager
      */
     public function planGate(Module $module, ?Tenant $tenant = null): ?string
     {
+        $tenant ??= $this->ctx->tenant();
+        $planFeature = $this->manifest($module->key)['plan_feature'] ?? null;
+        if ($planFeature && (! $tenant || ! app(UsageService::class)->allows($tenant, $planFeature))) {
+            $plans = app(UsageService::class)->featurePlans($planFeature);
+            $label = UsageService::FEATURE_LABELS[$planFeature][0] ?? str($planFeature)->headline()->toString();
+
+            return __('This module requires a plan that includes :feature. Available on: :plans.', [
+                'feature' => __($label),
+                'plans' => $plans,
+            ]);
+        }
+
         $minPlanSlug = $module->min_plan;
 
         if (! $minPlanSlug) {
             return null;
         }
 
-        $tenant ??= $this->ctx->tenant();
         $required = Plan::query()->where('slug', $minPlanSlug)->first();
 
         if (! $required) {
@@ -301,7 +351,12 @@ class ModuleManager
         $items = [];
 
         foreach ($this->installs($tenant) as $key => $install) {
-            if (! $install->isActive()) {
+            if (! $install->isActive()
+                || $install->module->availability_status !== Module::STATUS_ACTIVE
+                || ! $install->module->is_active) {
+                continue;
+            }
+            if ($this->planGate($install->module, $tenant) !== null) {
                 continue;
             }
 

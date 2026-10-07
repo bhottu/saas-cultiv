@@ -9,6 +9,12 @@
 */
 
 return [
+    'Downgrade to Free?' => 'Downgrade ke Free?',
+    'Are you sure you want to downgrade to the Free plan? Features available only on paid plans may no longer be accessible.' => 'Yakin ingin beralih ke paket Free? Fitur yang hanya tersedia pada paket berbayar mungkin tidak dapat digunakan lagi.',
+    'Confirm downgrade' => 'Konfirmasi penurunan paket',
+    'Downgrade to Free' => 'Downgrade ke Free',
+    'Switch to Free' => 'Switch to Free',
+    'Subscribe' => 'Berlangganan',
     'Payment' => 'Pembayaran',
     'Payment successful' => 'Pembayaran berhasil',
     'Your payment was successful.' => 'Pembayaran Anda berhasil diproses.',

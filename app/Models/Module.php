@@ -16,6 +16,18 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class Module extends Model
 {
+    public const STATUS_ACTIVE = 'active';
+
+    public const STATUS_HIDDEN = 'hidden';
+
+    public const STATUS_MAINTENANCE = 'maintenance';
+
+    public const AVAILABILITY_STATUSES = [
+        self::STATUS_ACTIVE,
+        self::STATUS_HIDDEN,
+        self::STATUS_MAINTENANCE,
+    ];
+
     protected $guarded = [];
 
     protected $casts = [
@@ -37,7 +49,29 @@ class Module extends Model
     /** Modules the marketplace may offer (inactive rows stay for historical FKs). */
     public function scopeAvailable(Builder $query): Builder
     {
-        return $query->where('is_active', true);
+        return $query->where('is_active', true)
+            ->where('availability_status', self::STATUS_ACTIVE);
+    }
+
+    public function scopeVisibleToWorkspaces(Builder $query): Builder
+    {
+        return $query->where(function (Builder $visible) {
+            $visible->where('availability_status', self::STATUS_MAINTENANCE)
+                ->orWhere(function (Builder $active) {
+                    $active->where('availability_status', self::STATUS_ACTIVE)
+                        ->where('is_active', true);
+                });
+        });
+    }
+
+    public function availabilityStatusLabel(): string
+    {
+        return match ($this->availability_status) {
+            self::STATUS_ACTIVE => __('Available'),
+            self::STATUS_HIDDEN => __('Hidden'),
+            self::STATUS_MAINTENANCE => __('Under maintenance'),
+            default => __('Unknown'),
+        };
     }
 
     /**

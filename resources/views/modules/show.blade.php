@@ -25,7 +25,9 @@
                     <h3 class="text-lg font-bold text-gray-900">{{ $module->name }}</h3>
                     <p class="mt-1 text-sm text-gray-600">{{ $module->description }}</p>
                     <div class="mt-3 flex flex-wrap gap-2 text-xs">
-                        <span class="rounded bg-indigo-600 px-2 py-0.5 font-medium text-white">{{ $module->priceLabel() }}</span>
+                        <span class="rounded bg-indigo-600 px-2 py-0.5 font-medium text-white">
+                            {{ ! empty(config("modules.manifests.{$module->key}.plan_feature")) ? __('Included with an eligible plan') : $module->priceLabel() }}
+                        </span>
                         @if ($module->min_plan)
                             <span class="rounded bg-indigo-50 px-2 py-0.5 font-medium text-indigo-700">{{ __('Requires :plan', ['plan' => ucfirst($module->min_plan)]) }}</span>
                         @endif

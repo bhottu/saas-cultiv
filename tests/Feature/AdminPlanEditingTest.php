@@ -320,6 +320,23 @@ class AdminPlanEditingTest extends TestCase
         $this->assertFalse($this->pro->fresh()->allows('advanced_analytics'));
     }
 
+    public function test_cultiv_ai_entitlement_is_editable_and_persisted_per_plan(): void
+    {
+        $this->asAdmin()->get("/admin/plans/{$this->pro->id}/edit")
+            ->assertOk()
+            ->assertSee('AI Assistant Telegram');
+
+        $this->asAdmin()->put("/admin/plans/{$this->pro->id}", $this->payload([
+            'entitlements' => ['max_users' => 15, 'advanced_reports' => 1, 'cultiv_ai' => 1],
+        ]))->assertRedirect();
+        $this->assertTrue($this->pro->fresh()->allows('cultiv_ai'));
+
+        $this->asAdmin()->put("/admin/plans/{$this->pro->id}", $this->payload([
+            'entitlements' => ['max_users' => 15, 'advanced_reports' => 1, 'cultiv_ai' => 0],
+        ]))->assertRedirect();
+        $this->assertFalse($this->pro->fresh()->allows('cultiv_ai'));
+    }
+
     public function test_an_existing_subscription_survives_a_plan_edit(): void
     {
         Subscription::create([
