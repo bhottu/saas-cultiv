@@ -162,6 +162,47 @@ class ModuleManagementTest extends TestCase
         ]);
     }
 
+    public function test_pos_details_are_shown_without_changing_module_activation_state(): void
+    {
+        $module = $this->posModule();
+        $this->owner->forceFill(['locale' => 'id'])->save();
+
+        $html = $this->asOwner()
+            ->get('/modules')
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('Pasang', $html);
+        $this->assertStringContainsString('Detil', $html);
+        $this->assertStringContainsString('pos-module-details', $html);
+        $this->assertStringContainsString('grid-cols-[minmax(0,7fr)_minmax(0,3fr)]', $html);
+        $this->assertStringContainsString('type="button"', $html);
+        $this->assertStringContainsString('Apa itu POS?', $html);
+        $this->assertStringContainsString('Manfaat POS', $html);
+        $this->assertStringContainsString(route('modules.install', $module), $html);
+        $this->assertStringNotContainsString('direct receipt printing', strtolower($html));
+        $this->assertDatabaseMissing('tenant_modules', [
+            'tenant_id' => $this->tenant->id,
+            'module_id' => $module->id,
+        ]);
+        $this->assertSame(
+            'Find products, scan barcodes, calculate sales totals, and record checkouts.',
+            __('Find products, scan barcodes, calculate sales totals, and record checkouts.', [], 'en')
+        );
+        $this->assertSame(
+            'Cari produk, pindai barcode, hitung total penjualan, dan catat transaksi.',
+            __('Find products, scan barcodes, calculate sales totals, and record checkouts.', [], 'id')
+        );
+
+        $this->owner->forceFill(['locale' => 'en'])->save();
+        $this->asOwner()
+            ->get('/modules')
+            ->assertOk()
+            ->assertSee('What is POS?')
+            ->assertSee('How POS helps')
+            ->assertSee('Close');
+    }
+
     public function test_installing_twice_does_not_create_a_second_install_row(): void
     {
         $this->asOwner()->post('/modules/pos/install');

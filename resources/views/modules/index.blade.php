@@ -28,6 +28,7 @@
                     $isInstalled = $install?->isInstalled() ?? false;
                     $gateReason = $planGates[$module->key] ?? null;
                     $isBlockedByPlan = $gateReason !== null;
+                    $isPos = $module->key === 'pos';
                 @endphp
 
                 <div class="flex flex-col justify-between rounded-xl border border-gray-200 bg-white p-6 shadow-sm hover:shadow-md transition">
@@ -60,7 +61,9 @@
                                 </a>
                                 <span class="ml-1 text-xs font-normal text-gray-400">v{{ $module->version }}</span>
                             </h3>
-                            <p class="mt-2 text-sm text-gray-600 line-clamp-3">{{ $module->description }}</p>
+                            <p class="mt-2 text-sm text-gray-600 line-clamp-3">
+                                {{ $module->key === 'pos' ? __('Find products, scan barcodes, calculate sales totals, and record checkouts.') : $module->description }}
+                            </p>
                         </div>
 
                         <div class="mt-4 flex flex-wrap items-center gap-2 text-xs text-gray-500">
@@ -84,37 +87,91 @@
 
                     <div class="mt-6 border-t border-gray-100 pt-4">
                         @if (! $canManage)
-                            <span class="text-xs text-gray-400">{{ __('Admin access required.') }}</span>
+                            @if ($isPos)
+                                <div class="grid grid-cols-[minmax(0,7fr)_minmax(0,3fr)] items-stretch gap-2">
+                                    <span class="inline-flex items-center text-xs text-gray-400">{{ __('Admin access required.') }}</span>
+                                    <button type="button"
+                                            class="inline-flex min-w-0 items-center justify-center rounded-lg border border-gray-300 bg-white px-2 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                                            @click="$dispatch('open-modal', 'pos-module-details')">
+                                        {{ __('Module details') }}
+                                    </button>
+                                </div>
+                            @else
+                                <span class="text-xs text-gray-400">{{ __('Admin access required.') }}</span>
+                            @endif
                         @elseif ($isBlockedByPlan)
-                            <a href="{{ route('billing.index') }}" class="inline-flex w-full items-center justify-center rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200">
-                                {{ __('Upgrade to unlock') }}
-                            </a>
-                        @elseif ($isActive)
-                            <div class="flex items-center gap-2">
-                                @if ($module->route && Route::has($module->route))
-                                    <a href="{{ route($module->route) }}" class="inline-flex flex-1 items-center justify-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700">
-                                        {{ __('Open') }}
+                            @if ($isPos)
+                                <div class="grid grid-cols-[minmax(0,7fr)_minmax(0,3fr)] gap-2">
+                                    <a href="{{ route('billing.index') }}" class="inline-flex min-w-0 items-center justify-center rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200">
+                                        {{ __('Upgrade to unlock') }}
                                     </a>
-                                @endif
+                                    <button type="button"
+                                            class="inline-flex min-w-0 items-center justify-center rounded-lg border border-gray-300 bg-white px-2 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                                            @click="$dispatch('open-modal', 'pos-module-details')">
+                                        {{ __('Module details') }}
+                                    </button>
+                                </div>
+                            @else
+                                <a href="{{ route('billing.index') }}" class="inline-flex w-full items-center justify-center rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200">
+                                    {{ __('Upgrade to unlock') }}
+                                </a>
+                            @endif
+                        @elseif ($isActive)
+                            @if ($isPos)
+                                <div class="grid grid-cols-[minmax(0,7fr)_minmax(0,3fr)] gap-2">
+                                    @if ($module->route && Route::has($module->route))
+                                        <a href="{{ route($module->route) }}" class="inline-flex min-w-0 items-center justify-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                                            {{ __('Open') }}
+                                        </a>
+                                    @endif
+                                    <button type="button"
+                                            class="inline-flex min-w-0 items-center justify-center rounded-lg border border-gray-300 bg-white px-2 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                                            @click="$dispatch('open-modal', 'pos-module-details')">
+                                        {{ __('Module details') }}
+                                    </button>
+                                </div>
                                 @if (! $module->is_core)
-                                    <form method="POST" action="{{ route('modules.deactivate', $module) }}">
+                                    <form method="POST" action="{{ route('modules.deactivate', $module) }}" class="mt-2">
                                         @csrf
                                         <button type="submit" class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
                                             {{ __('Deactivate') }}
                                         </button>
                                     </form>
                                 @endif
-                            </div>
+                            @else
+                                <div class="flex items-center gap-2">
+                                    @if ($module->route && Route::has($module->route))
+                                        <a href="{{ route($module->route) }}" class="inline-flex flex-1 items-center justify-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                                            {{ __('Open') }}
+                                        </a>
+                                    @endif
+                                    @if (! $module->is_core)
+                                        <form method="POST" action="{{ route('modules.deactivate', $module) }}">
+                                            @csrf
+                                            <button type="submit" class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                                                {{ __('Deactivate') }}
+                                            </button>
+                                        </form>
+                                    @endif
+                                </div>
+                            @endif
                         @elseif ($isInstalled)
-                            <div class="flex items-center gap-2">
-                                <form method="POST" action="{{ route('modules.activate', $module) }}" class="flex-1">
-                                    @csrf
-                                    <button type="submit" class="inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700">
-                                        {{ __('Activate') }}
+                            @if ($isPos)
+                                <div class="grid grid-cols-[minmax(0,7fr)_minmax(0,3fr)] gap-2">
+                                    <form method="POST" action="{{ route('modules.activate', $module) }}" class="min-w-0">
+                                        @csrf
+                                        <button type="submit" class="inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+                                            {{ __('Activate') }}
+                                        </button>
+                                    </form>
+                                    <button type="button"
+                                            class="inline-flex min-w-0 items-center justify-center rounded-lg border border-gray-300 bg-white px-2 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                                            @click="$dispatch('open-modal', 'pos-module-details')">
+                                        {{ __('Module details') }}
                                     </button>
-                                </form>
+                                </div>
                                 @if (! $module->is_core)
-                                    <form method="POST" action="{{ route('modules.uninstall', $module) }}">
+                                    <form method="POST" action="{{ route('modules.uninstall', $module) }}" class="mt-2">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" class="text-xs text-gray-400 hover:text-red-600 px-2 py-2">
@@ -122,14 +179,48 @@
                                         </button>
                                     </form>
                                 @endif
-                            </div>
+                            @else
+                                <div class="flex items-center gap-2">
+                                    <form method="POST" action="{{ route('modules.activate', $module) }}" class="flex-1">
+                                        @csrf
+                                        <button type="submit" class="inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+                                            {{ __('Activate') }}
+                                        </button>
+                                    </form>
+                                    @if (! $module->is_core)
+                                        <form method="POST" action="{{ route('modules.uninstall', $module) }}">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="text-xs text-gray-400 hover:text-red-600 px-2 py-2">
+                                                {{ __('Uninstall') }}
+                                            </button>
+                                        </form>
+                                    @endif
+                                </div>
+                            @endif
                         @else
-                            <form method="POST" action="{{ route('modules.install', $module) }}">
-                                @csrf
-                                <button type="submit" class="inline-flex w-full items-center justify-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700">
-                                    {{ __('Install') }}
-                                </button>
-                            </form>
+                            @if ($isPos)
+                                <div class="grid grid-cols-[minmax(0,7fr)_minmax(0,3fr)] gap-2">
+                                    <form method="POST" action="{{ route('modules.install', $module) }}" class="min-w-0">
+                                        @csrf
+                                        <button type="submit" class="inline-flex w-full items-center justify-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                                            {{ __('Install') }}
+                                        </button>
+                                    </form>
+                                    <button type="button"
+                                            class="inline-flex min-w-0 items-center justify-center rounded-lg border border-gray-300 bg-white px-2 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                                            @click="$dispatch('open-modal', 'pos-module-details')">
+                                        {{ __('Module details') }}
+                                    </button>
+                                </div>
+                            @else
+                                <form method="POST" action="{{ route('modules.install', $module) }}">
+                                    @csrf
+                                    <button type="submit" class="inline-flex w-full items-center justify-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                                        {{ __('Install') }}
+                                    </button>
+                                </form>
+                            @endif
                         @endif
                     </div>
                 </div>
@@ -139,5 +230,48 @@
                 </div>
             @endforelse
         </div>
+
+        <x-modal name="pos-module-details" maxWidth="lg" focusable>
+            <div class="flex items-start justify-between gap-4 border-b border-gray-100 px-6 py-5">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900">{{ __('POS (Point of Sale)') }}</h3>
+                    <p class="mt-1 text-sm text-gray-500">{{ __('Sales tools connected to your Cultiv One workspace.') }}</p>
+                </div>
+                <button
+                    type="button"
+                    class="rounded-md p-1 text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    aria-label="{{ __('Close') }}"
+                    x-on:click="$dispatch('close-modal', 'pos-module-details')">
+                    <span aria-hidden="true" class="text-xl leading-none">&times;</span>
+                </button>
+            </div>
+
+            <div class="max-h-[70vh] space-y-6 overflow-y-auto px-5 pt-7 pb-6 sm:px-6 sm:pt-8 sm:pb-7">
+                <section>
+                    <h4 class="text-sm font-semibold text-gray-900">{{ __('What is POS?') }}</h4>
+                    <p class="mt-1 text-sm leading-6 text-gray-600">{{ __('POS (Point of Sale) helps you record and process sales transactions as they happen.') }}</p>
+                </section>
+
+                <section>
+                    <h4 class="text-sm font-semibold text-gray-900">{{ __('How POS helps') }}</h4>
+                    <ul class="mt-2 space-y-2 text-sm leading-6 text-gray-600">
+                        <li>{{ __('Search products by name or SKU, or scan a barcode.') }}</li>
+                        <li>{{ __('Add products to a cart and adjust item quantities.') }}</li>
+                        <li>{{ __('Automatically calculate subtotals, discounts, tax, and totals.') }}</li>
+                        <li>{{ __('Record the payment method, amount paid, and change.') }}</li>
+                        <li>{{ __('Completed sales update stock for products with inventory tracking enabled.') }}</li>
+                        <li>{{ __('Keep each transaction in your workspace sales history.') }}</li>
+                    </ul>
+                </section>
+
+                <p class="text-sm leading-6 text-gray-600">{{ __('POS uses the products and inventory already in your workspace, and records completed checkouts as sales.') }}</p>
+            </div>
+
+            <div class="flex justify-end border-t border-gray-100 bg-gray-50 px-6 py-4">
+                <x-secondary-button type="button" x-on:click="$dispatch('close-modal', 'pos-module-details')">
+                    {{ __('Close') }}
+                </x-secondary-button>
+            </div>
+        </x-modal>
     </div>
 </x-app-layout>
