@@ -1,97 +1,159 @@
 <x-app-layout>
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">Complete your payment</h2>
+        <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ __('Payment') }}</h2>
     </x-slot>
 
     <div class="py-12 max-w-3xl mx-auto sm:px-6 lg:px-8">
-        <div class="bg-white rounded-lg shadow p-8 text-center" x-data="paymentPoller('{{ route('billing.payment.status', $payment) }}')">
+        <div class="bg-white rounded-lg shadow p-6 sm:p-8"
+             data-initial-status="{{ $payment->status }}"
+             data-status-url="{{ route('billing.payment.status', $payment) }}"
+             data-check-url="{{ route('billing.payment.check', $payment) }}"
+             x-data="{
+                 status: 'pending',
+                 timer: null,
+                 init() {
+                     this.status = this.$el.dataset.initialStatus;
+                     if (this.status === 'pending') {
+                         this.timer = setInterval(() => this.poll(), 5000);
+                         this.poll();
+                     }
+                 },
+                 async poll() {
+                     if (this.status !== 'pending') return clearInterval(this.timer);
+                     try {
+                         const response = await fetch(this.$el.dataset.statusUrl);
+                         if (!response.ok) throw new Error(`Payment status request failed: ${response.status}`);
+                         const data = await response.json();
+                         this.status = data.status;
+                         if (data.status !== 'pending') clearInterval(this.timer);
+                     } catch (error) {
+                         console.warn('Unable to refresh payment status; polling will continue.', error);
+                     }
+                 },
+                 async checkNow() {
+                     try {
+                         const response = await fetch(this.$el.dataset.checkUrl, { method: 'POST' });
+                         if (!response.ok) throw new Error(`Payment check request failed: ${response.status}`);
+                         await this.poll();
+                     } catch (error) {
+                         console.warn('Unable to check payment status.', error);
+                     }
+                 }
+             }">
             @php
-                // Decided once, server-side: what artefacts did this gateway return?
-                $qrImage = $payment->qrImageUrl();
-                $qrString = $qrImage ? null : $payment->qrisPayloadString();
-                $checkoutUrl = $payment->checkoutUrl();
-                // Hosted checkout only when there is a checkout_url AND no QR to show —
-                // otherwise the QR stays the primary path and the link is a fallback.
-                $hostedOnly = $checkoutUrl !== null && $qrImage === null && $qrString === null;
+                $isKasera = $payment->provider === 'kasera';
+                $qrImage = $isKasera ? null : $payment->qrImageUrl();
+                $qrString = $isKasera ? null : $payment->qrisPayloadString();
+                $checkoutUrl = $isKasera ? $payment->checkoutUrl() : null;
+                $periodLabel = match ($periodMonths) {
+                    1 => __('1 month'),
+                    3 => __('3 months'),
+                    6 => __('6 months'),
+                    12 => __('12 months'),
+                    default => null,
+                };
             @endphp
-            <h3 class="text-lg font-bold mb-1">{{ $hostedOnly ? __('Open the payment page to complete checkout') : 'Scan QRIS to pay' }}</h3>
-            <p class="text-sm text-gray-500 mb-4">Amount: <strong>{{ \App\Services\Money::formatRupiah($payment->amount) }}</strong></p>
 
-            {{-- The QR is QRIS.PW's own resource, passed through byte-for-byte:
-                 Payment::qrImageUrl() reads the stored create-payment response and
-                 returns it verbatim, so the scanned code is the provider's code.
-                 Cultiv never assembles, re-encodes or rebuilds a QRIS payload. --}}
-            @if ($qrImage)
-                <img src="{{ $qrImage }}" alt="QRIS payment code" class="mx-auto w-56 h-56 border rounded">
-            @elseif ($qrString)
-                {{-- The provider sent a QRIS payload but no image URL. The payload is
-                     shown verbatim so the payment is still completable and so the
-                     response contract can be confirmed; no QR is invented here. --}}
-                <div class="mx-auto w-56 h-56 border rounded p-2 overflow-auto text-left">
-                    <p class="text-xs text-gray-500">QRIS code from the payment provider:</p>
-                    <p class="text-xs font-mono break-all">{{ $qrString }}</p>
+            @if ($payment->status === 'pending')
+            <section x-show="status === 'pending'">
+                <h3 class="text-xl font-bold text-gray-900 mb-2">{{ $plan?->name ?? __('Subscription') }}</h3>
+
+                <div class="space-y-3 text-sm text-gray-700">
+                    <p>{{ __('Amount') }}: <strong class="text-lg text-gray-900">{{ \App\Services\Money::formatRupiah($payment->amount) }}</strong></p>
+
+                    @if ($periodLabel)
+                        <p>{{ __('Billing period') }}: <strong>{{ $periodLabel }}</strong></p>
+                    @endif
+
+                    @if ($isKasera)
+                        <p class="text-gray-600">{{ __('You will be redirected to the payment page') }}</p>
+                    @elseif ($qrImage || $qrString)
+                        <p class="text-gray-600">{{ __('Please scan the QR code to complete your payment') }}</p>
+                    @endif
                 </div>
-            @elseif ($checkoutUrl)
-                {{-- No QR artefact, but Kasera handed us a hosted checkout page: that
-                     page renders the QR / payment options, and the URL is the
-                     provider's own, passed through verbatim. --}}
-                <p class="text-gray-500">{{ __('Complete this payment on the hosted payment page.') }}</p>
-            @else
-                <p class="text-gray-500">QR code unavailable — try creating a new payment.</p>
+
+                @if ($qrImage)
+                    <img src="{{ $qrImage }}" alt="{{ __('QRIS payment code') }}" class="mx-auto mt-5 w-56 h-56 max-w-full border rounded">
+                @elseif ($qrString)
+                    <div class="mx-auto mt-5 max-w-full rounded border p-3 text-left sm:w-80">
+                        <p class="text-xs text-gray-500">{{ __('QRIS payment code') }}</p>
+                        <p class="mt-1 break-all font-mono text-xs">{{ $qrString }}</p>
+                    </div>
+                @elseif (! $isKasera && ! $checkoutUrl)
+                    <p class="mt-5 text-sm text-gray-500">{{ __('QR code unavailable — try creating a new payment.') }}</p>
+                @endif
+
+                @if ($checkoutUrl)
+                    <a href="{{ $checkoutUrl }}" target="_blank" rel="noopener noreferrer"
+                       class="inline-flex max-w-full items-center justify-center mt-5 px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700">
+                        {{ __('Pay now') }}
+                    </a>
+                @elseif ($isKasera)
+                    <p class="mt-5 text-sm text-gray-500">{{ __('Payment checkout is unavailable. Please return to billing and try again.') }}</p>
+                @endif
+
+                <div class="mt-5 text-sm text-gray-600 break-words">
+                    {{ __('Order') }}: <span class="font-mono">{{ $payment->order_id }}</span>
+                </div>
+
+                <div class="mt-6" x-show="status === 'pending'">
+                    <p class="text-yellow-700 bg-yellow-50 py-2 px-3 rounded">{{ __('Waiting for payment…') }}</p>
+                    <button @click="checkNow()" class="mt-3 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm">
+                        {{ __('I\'ve paid — check status') }}
+                    </button>
+                </div>
+            </section>
             @endif
 
-            @if ($checkoutUrl)
-                <a href="{{ $checkoutUrl }}" target="_blank" rel="noopener noreferrer"
-                   class="inline-block mt-3 px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700">{{ __('Open payment page') }}</a>
+            @if ($payment->status === 'pending' || in_array($payment->status, ['paid', 'completed', 'successful', 'settlement'], true))
+            <section class="text-center" x-show="['paid', 'completed', 'successful', 'settlement'].includes(status)" x-cloak>
+                <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-2xl font-bold text-green-700" aria-hidden="true">✓</div>
+                <h3 class="text-xl font-bold text-green-800">{{ __('Payment successful') }}</h3>
+                <p class="mt-2 text-sm text-gray-600">{{ __('Your payment was successful.') }}</p>
+
+                <dl class="mt-6 space-y-3 rounded-lg bg-gray-50 p-4 text-left text-sm sm:p-5">
+                    @if ($plan)
+                        <div class="flex flex-wrap justify-between gap-x-4 gap-y-1">
+                            <dt class="text-gray-500">{{ __('Plan') }}</dt>
+                            <dd class="font-semibold text-gray-900">{{ $plan->name }}</dd>
+                        </div>
+                    @endif
+                    @if ($periodLabel)
+                        <div class="flex flex-wrap justify-between gap-x-4 gap-y-1">
+                            <dt class="text-gray-500">{{ __('Billing period') }}</dt>
+                            <dd class="font-semibold text-gray-900">{{ $periodLabel }}</dd>
+                        </div>
+                    @endif
+                    <div class="flex flex-wrap justify-between gap-x-4 gap-y-1">
+                        <dt class="text-gray-500">{{ __('Amount') }}</dt>
+                        <dd class="font-semibold text-gray-900">{{ \App\Services\Money::formatRupiah($payment->amount) }}</dd>
+                    </div>
+                    <div class="flex flex-wrap justify-between gap-x-4 gap-y-1">
+                        <dt class="text-gray-500">{{ __('Status') }}</dt>
+                        <dd class="font-semibold text-green-700">{{ __('Successful') }}</dd>
+                    </div>
+                    <div class="flex flex-wrap justify-between gap-x-4 gap-y-1">
+                        <dt class="text-gray-500">{{ __('Order') }}</dt>
+                        <dd class="break-all text-right font-mono text-gray-900">{{ $payment->order_id }}</dd>
+                    </div>
+                </dl>
+
+                <a href="{{ route('billing.index') }}"
+                   class="inline-flex max-w-full items-center justify-center mt-6 px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700">
+                    {{ __('Open Billing') }}
+                </a>
+            </section>
             @endif
 
-            <div class="mt-4 text-sm">
-                Order: <span class="font-mono">{{ $payment->order_id }}</span><br>
-                Expires: <strong x-text="expiresAt ? new Date(expiresAt).toLocaleTimeString() : '{{ $payment->expires_at?->format('H:i') }}'"></strong>
-            </div>
-
-            <div class="mt-6" x-show="status === 'pending'">
-                <p class="text-yellow-700 bg-yellow-50 py-2 rounded">Waiting for payment…
-                    <span x-text="secondsLeft ? Math.ceil(secondsLeft) + 's left' : ''"></span></p>
-                <button @click="checkNow()" class="mt-3 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm">I've paid — check status</button>
-            </div>
-            <div class="mt-6 text-green-700 bg-green-50 py-3 rounded font-semibold" x-show="status === 'paid'" x-cloak>
-                ✓ Payment confirmed! Your subscription is active.
-            </div>
-            <div class="mt-6 text-red-700 bg-red-50 py-3 rounded" x-show="['expired','failed','cancelled'].includes(status)" x-cloak>
-                Payment <span x-text="status"></span>. <a class="underline" href="{{ route('billing.index') }}">Create a new payment</a>.
-            </div>
+            @if ($payment->status === 'pending' || in_array($payment->status, ['expired', 'failed', 'cancelled'], true))
+            <section class="mt-6 rounded-lg bg-red-50 p-4 text-center text-red-800"
+                     x-show="['expired', 'failed', 'cancelled'].includes(status)" x-cloak>
+                <h3 class="font-semibold">{{ __('Payment could not be completed.') }}</h3>
+                <p class="mt-1 text-sm">{{ __('Your payment could not be completed. You can return to billing and try again.') }}</p>
+                <a href="{{ route('billing.index') }}" class="mt-3 inline-block font-semibold underline">{{ __('Open Billing') }}</a>
+            </section>
+            @endif
         </div>
     </div>
 
-    @push('scripts')
-    <script>
-        Alpine.data('paymentPoller', (statusUrl) => ({
-            status: 'pending',
-            secondsLeft: null,
-            expiresAt: null,
-            init() {
-                // NOTE: polling only reads server state — the backend is the single source of truth.
-                this.timer = setInterval(() => this.poll(), 5000);
-                this.poll();
-            },
-            async poll() {
-                if (this.status !== 'pending') return clearInterval(this.timer);
-                try {
-                    const res = await fetch(statusUrl);
-                    const data = await res.json();
-                    this.status = data.status;
-                    this.secondsLeft = data.seconds_left;
-                    this.expiresAt = data.expires_at;
-                    if (data.status === 'paid') clearInterval(this.timer);
-                } catch (e) { /* transient network errors: keep polling */ }
-            },
-            async checkNow() {
-                // Ask backend to verify directly with QRIS.PW (rate-limited server-side).
-                await fetch('{{ route('billing.payment.check', $payment) }}', { method: 'POST' });
-                this.poll();
-            },
-        }));
-    </script>
-    @endpush
 </x-app-layout>

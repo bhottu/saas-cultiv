@@ -74,10 +74,52 @@
                 </div>
 
                 <div>
-                    <x-input-label for="price_yearly" :value="__('Yearly Price')" />
-                    <x-text-input id="price_yearly" name="price_yearly" type="number" inputmode="numeric"
+                    <x-input-label for="price_1month" :value="__('1-month Price')" />
+                    <x-text-input id="price_1month" name="price_1month" type="number" inputmode="numeric"
                                   class="mt-1 block w-full" min="0" step="1"
-                                  :value="old('price_yearly', $plan->price_yearly)" />
+                                  :value="old('price_1month', $plan->price_1month)" />
+                    <p class="mt-1 text-xs text-gray-500">{{ __('Leave blank to fall back to monthly x 1.') }}</p>
+                    <x-input-error :messages="$errors->get('price_1month')" class="mt-1" />
+                </div>
+
+                <div>
+                    <x-input-label for="price_3months" :value="__('3-month Price')" />
+                    <x-text-input id="price_3months" name="price_3months" type="number" inputmode="numeric"
+                                  class="mt-1 block w-full" min="0" step="1"
+                                  :value="old('price_3months', $plan->price_3months)" />
+                    <p class="mt-1 text-xs text-gray-500">{{ __('Leave blank to fall back to monthly x 3.') }}</p>
+                    <x-input-error :messages="$errors->get('price_3months')" class="mt-1" />
+                </div>
+            </div>
+        </section>
+
+        {{-- ------------------------------------------------------------------ Multi-period --}}
+        <section class="rounded-lg bg-white p-6 shadow">
+            <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-700">{{ __('Multi-period Prices') }}</h3>
+            <p class="mt-1 text-sm text-gray-500">
+                {{ __('Per-period prices replace the monthly x months calculation for the selected period.') }}
+            </p>
+
+            <div class="mt-5 grid gap-5 md:grid-cols-3">
+                <div>
+                    <x-input-label for="price_6months" :value="__('6-month Price')" />
+                    <x-text-input id="price_6months" name="price_6months" type="number" inputmode="numeric"
+                                  class="mt-1 block w-full" min="0" step="1"
+                                  :value="old('price_6months', $plan->price_6months)" />
+                    <p class="mt-1 text-xs text-gray-500">{{ __('Leave blank to fall back to monthly x 6.') }}</p>
+                    <x-input-error :messages="$errors->get('price_6months')" class="mt-1" />
+                </div>
+
+                <div>
+                    <x-input-label for="price_12months" :value="__('12-month Price')" />
+                    <x-text-input id="price_12months" name="price_12months" type="number" inputmode="numeric"
+                                  class="mt-1 block w-full" min="0" step="1"
+                                  :value="old('price_12months', $plan->price_12months)" />
+                    <p class="mt-1 text-xs text-gray-500">{{ __('Leave blank to fall back to monthly x 12.') }}</p>
+                    <x-input-error :messages="$errors->get('price_12months')" class="mt-1" />
+                </div>
+            </div>
+        </section>
                     <p class="mt-1 text-xs text-gray-500">{{ __('Leave blank when the plan is monthly only.') }}</p>
                     <x-input-error :messages="$errors->get('price_yearly')" class="mt-1" />
                 </div>

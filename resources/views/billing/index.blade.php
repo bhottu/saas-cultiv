@@ -35,6 +35,31 @@
             </div>
         @endif
 
+        <form id="downgrade-free-form" method="POST" action="{{ route('billing.checkout') }}" class="hidden">
+            @csrf
+            <input type="hidden" name="plan" value="free">
+            <input type="hidden" name="cycle" value="monthly">
+        </form>
+
+        <x-modal name="downgrade-free" focusable>
+            <div class="p-6">
+                <h3 class="text-lg font-medium text-gray-900">{{ __('Downgrade to Free?') }}</h3>
+                <p class="mt-2 text-sm text-gray-600">{{ __('Are you sure you want to downgrade to the Free plan? Features available only on paid plans may no longer be accessible.') }}</p>
+            </div>
+            <div class="bg-gray-50 px-6 py-4 flex justify-end gap-2">
+                <x-secondary-button type="button" x-on:click="$dispatch('close-modal', 'downgrade-free')">
+                    {{ __('Cancel') }}
+                </x-secondary-button>
+                <x-danger-button
+                    type="button"
+                    x-data="{ submitting: false }"
+                    x-bind:disabled="submitting"
+                    x-on:click="if (!submitting) { submitting = true; $dispatch('close-modal', 'downgrade-free'); document.getElementById('downgrade-free-form').requestSubmit(); }">
+                    {{ __('Confirm downgrade') }}
+                </x-danger-button>
+            </div>
+        </x-modal>
+
         {{-- Current subscription --}}
         <div class="bg-white rounded-lg shadow p-6">
             {{-- A platform administrator's plan is permanent, so the screen shows the
@@ -55,12 +80,12 @@
                         @endif
                     </div>
                     @if (! $isPermanent)
-                    <form method="POST" action="{{ route('billing.checkout') }}">
-                        @csrf
-                        <input type="hidden" name="plan" value="free">
-                        <input type="hidden" name="cycle" value="monthly">
-                        <button class="text-sm text-red-600 underline" @disabled($subscription?->plan?->is_free_tier)>Downgrade to Free</button>
-                    </form>
+                    <button type="button"
+                            class="text-sm text-red-600 underline"
+                            @click="$dispatch('open-modal', 'downgrade-free')"
+                            @disabled($subscription?->plan?->is_free_tier)>
+                        {{ __('Downgrade to Free') }}
+                    </button>
                     @endif
                 </div>
             @else
@@ -164,7 +189,33 @@
              and each form carries a hidden `period` bound to the same value, so a card
              always posts exactly what the customer picked — with or without JS, since
              the default of 1 month is a valid, complete request on its own. --}}
-        <div x-data="{ period: {{ (int) old('period', 1) }} }">
+        {{-- Every period price the admin may have stored, keyed by plan slug then
+             months, so a radio click recomputes the total client-side from the SAME
+             figures checkout charges server-side — no monthly x months guessing. --}}
+        @php
+            $billingPeriod = in_array((int) old('period', $period), [1, 3, 6, 12], true)
+                ? (int) old('period', $period)
+                : 1;
+            $periodPrices = collect($plans)->mapWithKeys(fn ($plan) => [
+                $plan->slug => collect([1, 3, 6, 12])->mapWithKeys(fn ($months) => [
+                    $months => \App\Services\Money::formatRupiah(
+                        $plan->priceForPeriod($months),
+                        $plan->currency
+                    ),
+                ])->all(),
+            ])->all();
+            $periodLabels = [
+                1 => __('1 month'),
+                3 => __('3 months'),
+                6 => __('6 months'),
+                12 => __('12 months'),
+            ];
+        @endphp
+        <div x-data="{{ \Illuminate\Support\Js::from([
+                'period' => $billingPeriod,
+                'prices' => $periodPrices,
+                'periodLabels' => $periodLabels,
+            ]) }}">
             <div class="bg-white rounded-lg shadow p-5 mb-4">
                 <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
                     <span class="text-sm font-semibold text-gray-700">{{ __('Payment period') }}</span>
@@ -199,16 +250,13 @@
                 <div class="bg-white rounded-lg shadow p-5 flex flex-col {{ $subscription?->plan_id === $plan->id ? 'ring-2 ring-indigo-500' : '' }}">
                     <h3 class="font-bold text-lg">{{ $plan->name }}</h3>
                     <p class="text-sm text-gray-500 mb-2">{{ $plan->description }}</p>
-                    <div class="text-xl font-bold mb-1">
-                        {{ \App\Services\Money::formatRupiah($plan->price_monthly) }}<span class="text-sm text-gray-500">/mo</span>
-                    </div>
-                    {{-- What the selected period costs in total. Server-rendered as the
-                         period=1 case so the page is truthful without JavaScript;
-                         Alpine only keeps it in step after a radio is clicked. --}}
-                    <div class="text-sm text-gray-600 mb-1" x-show="period > 1" x-cloak>
-                        <span class="font-semibold"
-                              x-text="'Rp ' + ({{ $plan->price_monthly }} * period).toLocaleString('id-ID')"></span>
-                        <span>{{ __('total for the period') }}</span>
+                    <div class="mb-1">
+                        <div class="text-xl font-bold"
+                             x-text="prices['{{ $plan->slug }}'][period] ?? prices['{{ $plan->slug }}'][1]">{{ \App\Services\Money::formatRupiah($plan->priceForPeriod($billingPeriod), $plan->currency) }}</div>
+                        <div class="text-sm text-gray-600">
+                            <span>{{ __('total for the period') }}</span>
+                            <span x-text="periodLabels[period] ?? periodLabels[1]">{{ $periodLabels[$billingPeriod] }}</span>
+                        </div>
                     </div>
                     {{-- Features + Modules come from one shared component so this page can
                          never disagree with the pricing page or /admin/plans. --}}
@@ -221,7 +269,13 @@
                             <input type="hidden" name="plan" value="{{ $plan->slug }}">
                             <input type="hidden" name="cycle" value="monthly">
                             <input type="hidden" name="period" :value="period">
-                            <x-primary-button data-busy-label="{{ __('Processing payment…') }}">{{ $plan->price_monthly > 0 ? 'Subscribe' : 'Switch to Free' }}</x-primary-button>
+                            @if ($plan->is_free_tier)
+                                <x-primary-button type="button" @click="$dispatch('open-modal', 'downgrade-free')">
+                                    {{ __('Switch to Free') }}
+                                </x-primary-button>
+                            @else
+                                <x-primary-button data-busy-label="{{ __('Processing payment…') }}">{{ __('Subscribe') }}</x-primary-button>
+                            @endif
                         </form>
                     @endif
                 </div>

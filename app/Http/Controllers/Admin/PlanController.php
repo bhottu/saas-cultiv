@@ -83,7 +83,12 @@ class PlanController extends AdminController
             'is_active' => $request->boolean('is_active'),
             'is_free_tier' => $request->boolean('is_free_tier'),
             'sort_order' => $data['sort_order'],
-            // slug is intentionally absent from this payload.
+            // Period-specific prices default to none, so the monthly x months rule
+            // keeps working until an admin stores a value here.
+            'price_1month' => $data['price_1month'] ?? 0,
+            'price_3months' => $data['price_3months'] ?? 0,
+            'price_6months' => $data['price_6months'] ?? 0,
+            'price_12months' => $data['price_12months'] ?? 0,
         ]);
 
         $this->audit($request, 'plan.updated', null, [
@@ -113,6 +118,12 @@ class PlanController extends AdminController
             // Optional because most plans are monthly-only; a blank box means "not set",
             // not "set to zero".
             'price_yearly' => ['nullable', 'integer', 'min:0', 'max:1000000000'],
+            // Manual per-period prices. 0 means "not set manually", so the monthly x
+            // months rule keeps working until an admin stores a value here.
+            'price_1month' => ['nullable', 'integer', 'min:0', 'max:1000000000'],
+            'price_3months' => ['nullable', 'integer', 'min:0', 'max:1000000000'],
+            'price_6months' => ['nullable', 'integer', 'min:0', 'max:1000000000'],
+            'price_12months' => ['nullable', 'integer', 'min:0', 'max:1000000000'],
             'currency' => ['nullable', 'string', 'size:3'],
             'features' => ['nullable', 'string', 'max:4000'],
             'entitlements' => ['nullable', 'array'],
@@ -131,6 +142,15 @@ class PlanController extends AdminController
             'name.required' => __('A plan needs a name.'),
             'price_monthly.integer' => __('Enter the price as a plain number, without a currency symbol.'),
             'price_monthly.min' => __('A price cannot be negative.'),
+            // Period-specific prices share the same integer/number rules.
+            'price_1month.integer' => __('Enter the price as a plain number, without a currency symbol.'),
+            'price_1month.min' => __('A price cannot be negative.'),
+            'price_3months.integer' => __('Enter the price as a plain number, without a currency symbol.'),
+            'price_3months.min' => __('A price cannot be negative.'),
+            'price_6months.integer' => __('Enter the price as a plain number, without a currency symbol.'),
+            'price_6months.min' => __('A price cannot be negative.'),
+            'price_12months.integer' => __('Enter the price as a plain number, without a currency symbol.'),
+            'price_12months.min' => __('A price cannot be negative.'),
             'sort_order.min' => __('The display order cannot be negative.'),
         ];
     }

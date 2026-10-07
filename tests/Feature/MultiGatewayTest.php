@@ -175,7 +175,7 @@ class MultiGatewayTest extends TestCase
         // The pay page offers the hosted checkout link Kasera returned.
         $html = $this->member()->get('/billing/payments/'.$payment->id)->assertOk()->getContent();
         $this->assertStringContainsString('https://pay.kasera.id/checkout/session-1', $html);
-        $this->assertStringContainsString('Open payment page', $html);
+        $this->assertStringContainsString('Pay now', $html);
     }
 
     public function test_a_payment_keeps_its_gateway_when_the_platform_switches(): void

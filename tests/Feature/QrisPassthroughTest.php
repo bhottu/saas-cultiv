@@ -108,14 +108,17 @@ class QrisPassthroughTest extends TestCase
         $this->assertStringNotContainsString('/img/A.png', $html);
     }
 
-    /** A cancelled payment's code must not be reachable on the checkout page. */
-    public function test_a_cancelled_payment_cannot_still_show_its_qr(): void
+    /** A cancelled payment may show its result, but never its old checkout artefacts. */
+    public function test_a_cancelled_payment_shows_its_result_without_its_qr(): void
     {
         $payment = $this->checkoutReturning(['qris_url' => 'https://qr.qris.pw/img/C.png']);
 
         $payment->update(['status' => 'cancelled', 'cancelled_at' => now()]);
 
-        $this->member()->get(route('billing.pay', $payment))->assertNotFound();
+        $this->member()->get(route('billing.pay', $payment))
+            ->assertOk()
+            ->assertSee('Payment could not be completed.')
+            ->assertDontSee('/img/C.png');
     }
 
     /**

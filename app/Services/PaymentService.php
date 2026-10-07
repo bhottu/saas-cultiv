@@ -125,11 +125,13 @@ class PaymentService
             $months = 12;
         }
 
-        $amount = $plan->priceFor($cycle);
-
-        if ($cycle === 'monthly' && $months > 1) {
-            $amount *= $months;
-        }
+        // The customer picks 1 / 3 / 6 / 12 months. A price the admin stored for that
+        // exact period wins (e.g. 3 months = Rp105.000 even when monthly x 3 = 117.000);
+        // only when no manual price exists does it fall back to monthly x months.
+        // Yearly keeps its own stored price and is never multiplied.
+        $amount = $cycle === 'yearly'
+            ? $plan->priceFor('yearly')
+            : $plan->priceForPeriod($months);
 
         // The invoice, the payment and the provider hand-off have to succeed or leave
         // nothing behind. Previously a gateway refusal (401 with no API key, timeout,

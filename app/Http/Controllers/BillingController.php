@@ -46,6 +46,12 @@ class BillingController extends Controller
             'pendingPayment' => $this->noticeFor($request, $tenant),
             'invoices' => $tenant->invoices()->latest()->take(20)->get(),
             'payments' => $tenant->payments()->latest()->take(20)->get(),
+            // Price the period cards: 1 month (default) unless the caller explicitly
+            // sends a longer billing period. Anything outside the purchasable set
+            // falls back to 1 so the selector can never carry a price we don't sell.
+            'period' => in_array((int) $request->input('period', 1), [1, 3, 6, 12], true)
+                ? (int) $request->input('period', 1)
+                : 1,
         ]);
     }
 
@@ -318,10 +324,31 @@ class BillingController extends Controller
         $ctx = app('tenant.context');
         $ctx->check();
 
-        // Scoped by tenant global scope → IDOR-proof.
-        $payment = $ctx->tenant()->payments()->where('status', 'pending')->findOrFail($paymentId);
+        // Scoped by tenant → a payment result is available after settlement too.
+        // Its persisted status is authoritative; redirect query parameters are ignored.
+        $payment = $ctx->tenant()->payments()
+            ->with(['invoice', 'subscription.plan'])
+            ->findOrFail($paymentId);
+        $metadata = $payment->invoice?->metadata ?? [];
+        $planId = $metadata['plan_id'] ?? null;
+        $plan = $planId ? Plan::find($planId) : $payment->subscription?->plan;
+        $periodMonths = $metadata['period_months'] ?? null;
 
-        return view('billing.pay', ['payment' => $payment]);
+        if (! is_numeric($periodMonths)) {
+            $periodMonths = ($metadata['billing_cycle'] ?? null) === 'yearly'
+                ? 12
+                : $payment->subscription?->period_months;
+        }
+
+        $periodMonths = is_numeric($periodMonths) && in_array((int) $periodMonths, [1, 3, 6, 12], true)
+            ? (int) $periodMonths
+            : null;
+
+        return view('billing.pay', [
+            'payment' => $payment,
+            'plan' => $plan,
+            'periodMonths' => $periodMonths,
+        ]);
     }
 
     /** Frontend polls this; backend remains the single source of truth. */

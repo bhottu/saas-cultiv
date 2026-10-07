@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Plan;
+use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Warehouse;
@@ -45,6 +46,74 @@ class BillingCheckoutTest extends TestCase
         $this->tenant->users()->attach($this->owner->id, [
             'role' => 'Owner', 'status' => 'active', 'joined_at' => now(),
         ]);
+    }
+
+    public function test_downgrade_to_free_requires_confirmation_before_form_submission(): void
+    {
+        $paidPlan = Plan::where('slug', 'starter')->firstOrFail();
+        Subscription::create([
+            'tenant_id' => $this->tenant->id,
+            'plan_id' => $paidPlan->id,
+            'status' => 'active',
+            'billing_cycle' => 'monthly',
+            'amount' => $paidPlan->price_monthly,
+            'currency' => $paidPlan->currency,
+            'current_period_start' => now(),
+            'current_period_end' => now()->addMonth(),
+        ]);
+
+        $this->owner->update(['locale' => 'id']);
+        $html = $this->billingIndexHtml();
+
+        $this->assertStringContainsString('Downgrade ke Free', $html);
+        $this->assertStringContainsString('type="button"', $html);
+        $this->assertStringContainsString("open-modal', 'downgrade-free'", $html);
+        $this->assertStringContainsString('Downgrade ke Free?', $html);
+        $this->assertStringContainsString('Batal', $html);
+        $this->assertStringContainsString('document.getElementById(\'downgrade-free-form\').requestSubmit()', $html);
+        $this->assertStringContainsString('Switch to Free', $html);
+        $this->assertDatabaseHas('subscriptions', [
+            'tenant_id' => $this->tenant->id,
+            'plan_id' => $paidPlan->id,
+            'status' => 'active',
+        ]);
+        $this->assertDatabaseMissing('subscriptions', [
+            'tenant_id' => $this->tenant->id,
+            'plan_id' => Plan::where('is_free_tier', true)->value('id'),
+        ]);
+
+        $this->owner->update(['locale' => 'en']);
+        $englishHtml = $this->billingIndexHtml();
+        $this->assertStringContainsString('Downgrade to Free?', $englishHtml);
+        $this->assertStringContainsString('Downgrade', $englishHtml);
+    }
+
+    public function test_confirmed_downgrade_still_uses_the_existing_checkout_action(): void
+    {
+        $paidPlan = Plan::where('slug', 'starter')->firstOrFail();
+        $subscription = Subscription::create([
+            'tenant_id' => $this->tenant->id,
+            'plan_id' => $paidPlan->id,
+            'status' => 'active',
+            'billing_cycle' => 'monthly',
+            'amount' => $paidPlan->price_monthly,
+            'currency' => $paidPlan->currency,
+            'current_period_start' => now(),
+            'current_period_end' => now()->addMonth(),
+        ]);
+
+        $this->member()->post(route('billing.checkout'), [
+            'plan' => 'free',
+            'cycle' => 'monthly',
+        ])->assertRedirect(route('billing.index'));
+
+        $this->assertSame('cancelled', $subscription->fresh()->status);
+        $this->assertSame(
+            Plan::where('is_free_tier', true)->value('id'),
+            $this->tenant->activeSubscription()->value('plan_id')
+        );
+
+        $this->billingIndexHtml();
     }
 
     /**
