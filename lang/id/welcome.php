@@ -91,7 +91,7 @@ return [
     'See how it works' => 'Lihat cara kerjanya',
     'See pricing' => 'Lihat harga',
     'Set up your business in a few simple steps.' => 'Atur bisnis Anda dalam beberapa langkah mudah.',
-    'Simple pricing that grows with you' => 'Harga sederhana yang berkembang bersama bisnis Anda.',
+    'Simple pricing that grows with you' => 'Harga yang transparan, sesuai dengan kebutuhan bisnis Anda.',
     'Skip to content' => 'Lewati ke konten',
     'Small Business' => 'Bisnis Kecil',
     'Start free' => 'Mulai gratis',

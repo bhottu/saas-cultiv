@@ -94,7 +94,7 @@ return [
     'See how it works' => 'See how it works',
     'See pricing' => 'See pricing',
     'Set up your business in a few simple steps.' => 'Set up your business in a few simple steps.',
-    'Simple pricing that grows with you' => 'Simple pricing that grows with you',
+    'Simple pricing that grows with you' => 'Transparent pricing that fits your business needs.',
     'Skip to content' => 'Skip to content',
     'Small Business' => 'Small Business',
     'Start free' => 'Start free',
