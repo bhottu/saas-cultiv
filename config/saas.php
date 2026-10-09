@@ -26,6 +26,10 @@ return [
         'max_customers' => ['period' => 'forever', 'fallback' => null],
         'storage_mb'    => ['period' => 'forever', 'fallback' => 100],
         'api_calls'     => ['period' => 'month',   'fallback' => 1000],
+        // Per-workspace API requests/minute for a plan that does not store the key.
+        // The plan rows carry their own value (Starter 60, Pro 300, Business 1000);
+        // this is only the fallback for a legacy plan created before the key existed.
+        'api_rate_limit' => ['period' => 'forever', 'fallback' => 60],
         'ai_messages'   => ['period' => 'month',   'fallback' => null],
     ],
 
@@ -50,6 +54,9 @@ return [
         'max_customers',
         'max_storage_mb',
         'max_api_calls',
+        // API requests per minute, per workspace (rate limit vs. the monthly quota
+        // above — two different ceilings, both plan-configurable).
+        'api_rate_limit',
         'max_ai_messages',
 
         // Capability switches read through Plan::allows().

@@ -43,7 +43,22 @@ class SubscriptionLimitsTest extends TestCase
         $this->assertTrue($plans['pro']->allows('advanced_permissions'));
         $this->assertTrue($plans['pro']->allows('audit_log'));
         $this->assertTrue($plans['pro']->allows('advanced_analytics'));
-        $this->assertFalse($plans['pro']->allows('api_access'));
+        // API Access is a PAID-plan feature: Starter, Pro and Business carry it, Free
+        // never does — and each paid plan carries its own rate limit + monthly quota.
+        $this->assertFalse($plans['free']->allows('api_access'));
+        $this->assertTrue($plans['starter']->allows('api_access'));
+        $this->assertTrue($plans['pro']->allows('api_access'));
+        $this->assertTrue($plans['business']->allows('api_access'));
+        $this->assertSame([60, 300, 1000], [
+            $plans['starter']->limit('api_rate_limit'),
+            $plans['pro']->limit('api_rate_limit'),
+            $plans['business']->limit('api_rate_limit'),
+        ]);
+        $this->assertSame([50000, 250000, 1000000], [
+            $plans['starter']->limit('api_calls'),
+            $plans['pro']->limit('api_calls'),
+            $plans['business']->limit('api_calls'),
+        ]);
         $this->assertTrue($plans['business']->allows('api_access'));
     }
 
@@ -112,7 +127,7 @@ class SubscriptionLimitsTest extends TestCase
         $usage->enforce($productTenant, 'max_products');
     }
 
-    public function test_api_access_is_business_only(): void
+    public function test_api_access_is_granted_to_every_paid_plan(): void
     {
         $owner = $this->user('api-owner');
         $free = $this->tenantFor($owner, Plan::where('slug', 'free')->firstOrFail(), 'api-free');
@@ -120,10 +135,15 @@ class SubscriptionLimitsTest extends TestCase
         Sanctum::actingAs($owner);
         $this->getJson('/api/v1/me')->assertStatus(403)->assertJsonPath('code', 'subscription_limit_reached');
 
+        $starter = $this->tenantFor($owner, Plan::where('slug', 'starter')->firstOrFail(), 'api-starter');
+        $owner->forceFill(['current_tenant_id' => $starter->id])->save();
+        Sanctum::actingAs($owner);
+        $this->getJson('/api/v1/me')->assertOk()->assertJsonPath('tenant.id', $starter->id);
+
         $pro = $this->tenantFor($owner, Plan::where('slug', 'pro')->firstOrFail(), 'api-pro');
         $owner->forceFill(['current_tenant_id' => $pro->id])->save();
         Sanctum::actingAs($owner);
-        $this->getJson('/api/v1/me')->assertStatus(403)->assertJsonPath('code', 'subscription_limit_reached');
+        $this->getJson('/api/v1/me')->assertOk()->assertJsonPath('tenant.id', $pro->id);
 
         $business = $this->tenantFor($owner, Plan::where('slug', 'business')->firstOrFail(), 'api-business');
         $owner->forceFill(['current_tenant_id' => $business->id])->save();

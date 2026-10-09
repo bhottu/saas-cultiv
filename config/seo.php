@@ -73,12 +73,13 @@ return [
         'audit-logs.index' => 'Audit log',
         'settings.index' => 'Settings',
         'profile.edit' => 'Profile',
-        'tokens.index' => 'API tokens',
+        'tokens.index' => 'API Access',
         'tenants.index' => 'Your workspaces',
         'admin.dashboard' => 'Admin',
         'admin.billing.edit' => 'Payment settings',
         'admin.seo.edit' => 'SEO Settings',
         'admin.plans.edit' => 'Edit plan',
+        'admin.api.index' => 'API Access',
     ],
 
     // Paths are relative to the public disk root; absolute URLs are built from `url`.

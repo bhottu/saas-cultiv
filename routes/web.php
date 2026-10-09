@@ -264,6 +264,13 @@ Route::middleware(['auth', 'verified', 'platform.admin'])->prefix('admin')->grou
     Route::put('/plans/{plan}', [\App\Http\Controllers\Admin\PlanController::class, 'update'])->name('admin.plans.update');
     Route::get('/modules', [\App\Http\Controllers\Admin\ModuleCatalogController::class, 'index'])->name('admin.modules.index');
     Route::put('/modules/{module:slug}', [\App\Http\Controllers\Admin\ModuleCatalogController::class, 'update'])->name('admin.modules.update');
+
+    // Global API capability matrix (§5): platform configuration, enforced on every
+    // /api/v1 request by ApiGuard — deliberately separate from the workspace's own
+    // /tokens screen (§7), and gated by the same platform.admin gate as the rest of
+    // this panel so a workspace owner can never reach it by guessing the URL (§27).
+    Route::get('/api', [\App\Http\Controllers\Admin\ApiCapabilityController::class, 'index'])->name('admin.api.index');
+    Route::put('/api', [\App\Http\Controllers\Admin\ApiCapabilityController::class, 'update'])->name('admin.api.update');
     Route::get('/ai', [\App\Http\Controllers\Admin\AiSettingsController::class, 'edit'])->name('admin.ai.edit');
     Route::put('/ai', [\App\Http\Controllers\Admin\AiSettingsController::class, 'update'])->name('admin.ai.update');
     Route::post('/ai/test', [\App\Http\Controllers\Admin\AiSettingsController::class, 'testProvider'])->name('admin.ai.test');
@@ -296,6 +303,9 @@ Route::middleware('auth')->group(function () {
     Route::middleware('tenant')->group(function () {
         Route::get('/tokens', [ApiTokenController::class, 'index'])->name('tokens.index');
         Route::post('/tokens', [ApiTokenController::class, 'store'])->name('tokens.store');
+        // Rotation = revoke + reissue with the same name and (still-available) scopes;
+        // the new plaintext secret is shown exactly once, like a creation.
+        Route::post('/tokens/{token}/rotate', [ApiTokenController::class, 'rotate'])->name('tokens.rotate');
         Route::delete('/tokens/{token}', [ApiTokenController::class, 'destroy'])->name('tokens.destroy');
 
         // Custom workspace branding. Editing needs a validated workspace context, and

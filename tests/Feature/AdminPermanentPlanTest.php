@@ -245,10 +245,12 @@ class AdminPermanentPlanTest extends TestCase
         $this->addMember($this->workspace, $this->member, 'Owner');
         $this->subscribe('starter');
 
-        // Starter has api_access = false. The gate must still refuse.
+        // Starter carries neither advanced reports nor the audit log. The gate must
+        // still refuse — the test's subject is "a paid feature a plan does not have",
+        // which no longer includes API Access (that is now every paid plan's feature).
         $this->expectException(\App\Exceptions\SubscriptionLimitException::class);
 
-        app(UsageService::class)->enforceFeature($this->workspace, 'api_access');
+        app(UsageService::class)->enforceFeature($this->workspace, 'advanced_reports');
     }
 
     public function test_a_removed_admin_member_stops_granting_the_plan(): void

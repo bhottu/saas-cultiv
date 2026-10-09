@@ -186,8 +186,9 @@ class ApplicationShellTest extends TestCase
 
         // 'Subscription' replaced 'Billing' in this list: the sidebar entry leads to the plan
         // and subscription screen, so it carries the subscription wording. The /billing
-        // route itself is deliberately unchanged.
-        foreach (['Dashboard', 'Orders', 'Customers', 'Returns', 'Reports', 'Products', 'Stock', 'Categories', 'Brands', 'Team', 'Subscription', 'Workspaces', 'Profile', 'API Tokens'] as $label) {
+        // route itself is deliberately unchanged. 'API Access' likewise replaced 'API Tokens'
+        // as the sidebar wording for the same /tokens screen; the route is unchanged.
+        foreach (['Dashboard', 'Orders', 'Customers', 'Returns', 'Reports', 'Products', 'Stock', 'Categories', 'Brands', 'Team', 'Subscription', 'Workspaces', 'Profile', 'API Access'] as $label) {
             $this->assertStringContainsString($label, $sidebar);
         }
 

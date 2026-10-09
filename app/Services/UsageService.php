@@ -23,7 +23,7 @@ class UsageService
     public const FEATURE_LABELS = [
         'advanced_reports' => ['Advanced Reports', 'Pro and Business'],
         'advanced_permissions' => ['Advanced Permissions', 'Pro and Business'],
-        'api_access' => ['API Access', 'Business'],
+        'api_access' => ['API Access', 'Starter, Pro and Business'],
         'audit_log' => ['Audit Log', 'Pro and Business'],
         'advanced_analytics' => ['Advanced Analytics', 'Pro and Business'],
         'cultiv_ai' => ['AI Assistant Telegram', ''],

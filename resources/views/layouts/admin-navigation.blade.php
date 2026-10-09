@@ -19,6 +19,7 @@
         ['label' => __('Payment settings'), 'icon' => 'cog', 'href' => route('admin.billing.edit'), 'active' => request()->routeIs('admin.billing.*')],
         ['label' => __('Plans'), 'icon' => 'tag', 'href' => route('admin.plans.index'), 'active' => request()->routeIs('admin.plans.*')],
         ['label' => __('Module management'), 'icon' => 'cube', 'href' => route('admin.modules.index'), 'active' => request()->routeIs('admin.modules.*')],
+        ['label' => __('API Access'), 'icon' => 'key', 'href' => route('admin.api.index'), 'active' => request()->routeIs('admin.api.*')],
         ['label' => __('AI Assistant'), 'icon' => 'sparkles', 'href' => route('admin.ai.edit'), 'active' => request()->routeIs('admin.ai.*')],
         ['label' => __('SEO'), 'icon' => 'globe', 'href' => route('admin.seo.edit'), 'active' => request()->routeIs('admin.seo.*')],
         ['label' => __('Audit Logs'), 'icon' => 'shield-check', 'href' => route('admin.audit-logs.index'), 'active' => request()->routeIs('admin.audit-logs.*')],

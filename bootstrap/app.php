@@ -29,6 +29,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'platform.admin' => \App\Http\Middleware\EnsurePlatformAdmin::class,
             'plan.feature' => \App\Http\Middleware\RequirePlanFeature::class,
             'module' => \App\Http\Middleware\EnsureModuleActive::class,
+            'api.tenant' => \App\Http\Middleware\EnsureApiTenantContext::class,
+            'api.guard' => \App\Http\Middleware\ApiGuard::class,
         ]);
         // Route-model binding resolves *after* this middleware, otherwise the
         // BelongsToTenant global scope is not applied yet and a row belonging to
@@ -36,6 +38,16 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->prependToPriorityList(
             before: \Illuminate\Routing\Middleware\SubstituteBindings::class,
             prepend: \App\Http\Middleware\EnsureTenantContext::class,
+        );
+        // API workspace resolution needs the same treatment one step earlier: the rate
+        // limiter sizes its bucket from the WORKSPACE'S PLAN, so the token's tenant must
+        // already be resolved when `throttle:api` runs — and binding substitution below
+        // must see the same tenant, or an id could be resolved against the wrong
+        // workspace. Position: after Authenticate (needs the user), before
+        // ThrottleRequests (needs the tenant) and before SubstituteBindings.
+        $middleware->prependToPriorityList(
+            before: \Illuminate\Routing\Middleware\ThrottleRequests::class,
+            prepend: \App\Http\Middleware\EnsureApiTenantContext::class,
         );
         $middleware->web(append: [
             \App\Http\Middleware\EnsureTenantContext::class,

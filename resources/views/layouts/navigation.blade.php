@@ -294,7 +294,7 @@
             'active' => request()->routeIs('settings.*'),
         ],
         [
-            'label' => __('API Tokens'),
+            'label' => __('API Access'),
             'icon' => 'key',
             'href' => route('tokens.index'),
             'active' => request()->routeIs('tokens.*'),

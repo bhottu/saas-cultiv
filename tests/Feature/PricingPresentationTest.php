@@ -161,7 +161,7 @@ class PricingPresentationTest extends TestCase
         // server-side gates (SubscriptionLimitsTest et al.) read these exact names.
         $expected = [
             'max_workspaces', 'max_users', 'max_products', 'max_customers',
-            'max_storage_mb', 'max_api_calls', 'basic_sales', 'basic_stock',
+            'max_storage_mb', 'max_api_calls', 'api_rate_limit', 'basic_sales', 'basic_stock',
             'basic_purchases', 'basic_reports', 'advanced_reports',
             'advanced_permissions', 'api_access', 'audit_log', 'advanced_analytics',
         ];

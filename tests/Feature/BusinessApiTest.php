@@ -133,13 +133,14 @@ class BusinessApiTest extends TestCase
         $this->assertSame($product->id, $response->json('data.0.id'));
     }
 
-    public function test_pro_plan_is_still_refused(): void
+    public function test_pro_plan_can_read_the_catalogue(): void
     {
         $this->onPlan('pro');
         $this->makeProduct();
 
-        // Pro has API access switched off; only Business carries it.
-        $this->api('/products')->assertForbidden();
+        // Pro is a paid plan, so API Access is included (Free remains the only tier
+        // refused above).
+        $this->api('/products')->assertOk();
     }
 
     public function test_api_never_exposes_another_workspaces_data(): void

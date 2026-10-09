@@ -51,7 +51,7 @@
         'basic_reports'         => 'Standard Reports',
         'advanced_reports'      => 'Advanced Reports',
         'advanced_permissions'  => 'Advanced Permissions',
-        'api_access'            => 'API',
+        'api_access'            => 'API Access',
         'audit_log'             => 'Audit Log',
         'advanced_analytics'    => 'Advanced Analytics',
     ];
@@ -60,6 +60,14 @@
     foreach ($capabilities as $key => $label) {
         if ($plan->allows($key)) {
             $included[] = $label;
+
+            // API Access is sold as a RATE and a QUOTA, not as a bare checkbox, so the
+            // card states both numbers — read from the plan's own entitlements so what
+            // is advertised can never drift from what the server enforces (§28).
+            if ($key === 'api_access') {
+                $included[] = number_format((int) $plan->limit('api_rate_limit')).' requests/minute';
+                $included[] = $plan->displayLimit('max_api_calls').' requests/month';
+            }
         }
     }
 

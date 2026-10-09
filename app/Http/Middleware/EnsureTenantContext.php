@@ -27,6 +27,16 @@ class EnsureTenantContext
 
         if (($user = $request->user() ?? Auth::user()) !== null) {
 
+            // A request authenticated by an API token belongs to
+            // EnsureApiTenantContext, which resolves the workspace FROM THE TOKEN
+            // (§2). Running the browser-session rule here as well would overwrite the
+            // token's binding with whichever workspace the owner happens to have
+            // selected — exactly the cross-workspace movement a bound credential must
+            // never make. Web/session requests attach no token, so they are unaffected.
+            if ($user->currentAccessToken() !== null) {
+                return $next($request);
+            }
+
             // Never trust the browser: validate that the tenant id belongs to this user.
             $tenantId = session('tenant_id') ?: $user->current_tenant_id;
 

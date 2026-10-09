@@ -19,14 +19,14 @@ Route::post('/ai/telegram/webhook', \App\Http\Controllers\AiTelegramWebhookContr
     ->name('ai.telegram.webhook');
 
 // Versioned API (Sanctum personal access tokens).
-Route::prefix('v1')->middleware(['auth:sanctum', 'tenant', 'plan.feature:api_access', 'throttle:api'])->group(function () {
+Route::prefix('v1')->middleware(['auth:sanctum', 'api.tenant', 'plan.feature:api_access', 'throttle:api'])->group(function () {
     Route::get('/me', fn (\Illuminate\Http\Request $r) => response()->json([
         'id' => $r->user()->id,
         'name' => $r->user()->name,
         'email' => $r->user()->email,
         'tenant' => app('tenant.context')->tenant()?->only(['id', 'name', 'slug']),
         'role' => app('tenant.context')->role(),
-    ]))->name('api.v1.me');
+    ]))->middleware('api.guard')->name('api.v1.me');
 
     Route::get('/usage', function (\Illuminate\Http\Request $r) {
         $ctx = app('tenant.context');
@@ -39,7 +39,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'tenant', 'plan.feature:api_acc
                 $m => ['used' => $usage->usage($ctx->tenant(), $m), 'limit' => $usage->limit($ctx->tenant(), $m)],
             ]),
         ]);
-    })->name('api.v1.usage');
+    })->middleware('api.guard')->name('api.v1.usage');
 
     Route::get('/payments', function (\Illuminate\Http\Request $r) {
         $ctx = app('tenant.context');
@@ -47,7 +47,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'tenant', 'plan.feature:api_acc
 
         return response()->json($ctx->tenant()->payments()->latest()->take(50)
             ->get(['id', 'order_id', 'amount', 'currency', 'status', 'created_at']));
-    })->name('api.v1.payments');
+    })->middleware('api.guard:payments,read')->name('api.v1.payments');
 
     // ---------------------------------------------------------------- business data
     //
@@ -59,53 +59,83 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'tenant', 'plan.feature:api_acc
     // Static segments are declared BEFORE the {id} routes so a path like
     // "products/lookup" is never parsed as a product id.
     Route::get('/products/lookup', [\App\Http\Controllers\Api\V1\ProductController::class, 'lookup'])
-        ->name('api.v1.products.lookup');
+        ->middleware('api.guard:products,read')->name('api.v1.products.lookup');
     Route::get('/products', [\App\Http\Controllers\Api\V1\ProductController::class, 'index'])
-        ->name('api.v1.products.index');
+        ->middleware('api.guard:products,read')->name('api.v1.products.index');
     Route::get('/products/{product}', [\App\Http\Controllers\Api\V1\ProductController::class, 'show'])
-        ->name('api.v1.products.show');
+        ->middleware('api.guard:products,read')->name('api.v1.products.show');
+    Route::post('/products', [\App\Http\Controllers\Api\V1\ProductController::class, 'store'])
+        ->middleware('api.guard:products,write')
+        ->name('api.v1.products.store');
+    Route::match(['put', 'patch'], '/products/{product}', [\App\Http\Controllers\Api\V1\ProductController::class, 'update'])
+        ->middleware('api.guard:products,write')
+        ->name('api.v1.products.update');
 
     Route::get('/categories', [\App\Http\Controllers\Api\V1\CategoryController::class, 'index'])
-        ->name('api.v1.categories.index');
+        ->middleware('api.guard:categories,read')->name('api.v1.categories.index');
     Route::get('/categories/{category}', [\App\Http\Controllers\Api\V1\CategoryController::class, 'show'])
-        ->name('api.v1.categories.show');
+        ->middleware('api.guard:categories,read')->name('api.v1.categories.show');
+    Route::post('/categories', [\App\Http\Controllers\Api\V1\CategoryController::class, 'store'])
+        ->middleware('api.guard:categories,write')
+        ->name('api.v1.categories.store');
+    Route::match(['put', 'patch'], '/categories/{category}', [\App\Http\Controllers\Api\V1\CategoryController::class, 'update'])
+        ->middleware('api.guard:categories,write')
+        ->name('api.v1.categories.update');
 
     Route::get('/brands', [\App\Http\Controllers\Api\V1\BrandController::class, 'index'])
-        ->name('api.v1.brands.index');
+        ->middleware('api.guard:brands,read')->name('api.v1.brands.index');
     Route::get('/brands/{brand}', [\App\Http\Controllers\Api\V1\BrandController::class, 'show'])
-        ->name('api.v1.brands.show');
+        ->middleware('api.guard:brands,read')->name('api.v1.brands.show');
+    Route::post('/brands', [\App\Http\Controllers\Api\V1\BrandController::class, 'store'])
+        ->middleware('api.guard:brands,write')
+        ->name('api.v1.brands.store');
+    Route::match(['put', 'patch'], '/brands/{brand}', [\App\Http\Controllers\Api\V1\BrandController::class, 'update'])
+        ->middleware('api.guard:brands,write')
+        ->name('api.v1.brands.update');
 
     Route::get('/customers', [\App\Http\Controllers\Api\V1\CustomerController::class, 'index'])
-        ->name('api.v1.customers.index');
+        ->middleware('api.guard:customers,read')->name('api.v1.customers.index');
     Route::get('/customers/{customer}', [\App\Http\Controllers\Api\V1\CustomerController::class, 'show'])
-        ->name('api.v1.customers.show');
+        ->middleware('api.guard:customers,read')->name('api.v1.customers.show');
+    Route::post('/customers', [\App\Http\Controllers\Api\V1\CustomerController::class, 'store'])
+        ->middleware('api.guard:customers,write')
+        ->name('api.v1.customers.store');
+    Route::match(['put', 'patch'], '/customers/{customer}', [\App\Http\Controllers\Api\V1\CustomerController::class, 'update'])
+        ->middleware('api.guard:customers,write')
+        ->name('api.v1.customers.update');
     Route::get('/customers/{customer}/sales', [\App\Http\Controllers\Api\V1\CustomerController::class, 'sales'])
-        ->name('api.v1.customers.sales');
+        ->middleware('api.guard:customers,read')->name('api.v1.customers.sales');
 
     Route::get('/suppliers', [\App\Http\Controllers\Api\V1\SupplierController::class, 'index'])
-        ->name('api.v1.suppliers.index');
+        ->middleware('api.guard:suppliers,read')->name('api.v1.suppliers.index');
     Route::get('/suppliers/{supplier}', [\App\Http\Controllers\Api\V1\SupplierController::class, 'show'])
-        ->name('api.v1.suppliers.show');
+        ->middleware('api.guard:suppliers,read')->name('api.v1.suppliers.show');
+    Route::post('/suppliers', [\App\Http\Controllers\Api\V1\SupplierController::class, 'store'])
+        ->middleware('api.guard:suppliers,write')
+        ->name('api.v1.suppliers.store');
+    Route::match(['put', 'patch'], '/suppliers/{supplier}', [\App\Http\Controllers\Api\V1\SupplierController::class, 'update'])
+        ->middleware('api.guard:suppliers,write')
+        ->name('api.v1.suppliers.update');
 
     Route::get('/warehouses', [\App\Http\Controllers\Api\V1\WarehouseController::class, 'index'])
-        ->name('api.v1.warehouses.index');
+        ->middleware('api.guard:warehouses,read')->name('api.v1.warehouses.index');
     Route::get('/warehouses/{warehouse}', [\App\Http\Controllers\Api\V1\WarehouseController::class, 'show'])
-        ->name('api.v1.warehouses.show');
+        ->middleware('api.guard:warehouses,read')->name('api.v1.warehouses.show');
 
     Route::get('/stock/summary', [\App\Http\Controllers\Api\V1\StockController::class, 'summary'])
-        ->name('api.v1.stock.summary');
+        ->middleware('api.guard:stock,read')->name('api.v1.stock.summary');
     Route::get('/stock', [\App\Http\Controllers\Api\V1\StockController::class, 'index'])
-        ->name('api.v1.stock.index');
+        ->middleware('api.guard:stock,read')->name('api.v1.stock.index');
     Route::get('/stock/{product}', [\App\Http\Controllers\Api\V1\StockController::class, 'show'])
-        ->name('api.v1.stock.show');
+        ->middleware('api.guard:stock,read')->name('api.v1.stock.show');
 
     Route::get('/sales', [\App\Http\Controllers\Api\V1\SaleController::class, 'index'])
-        ->name('api.v1.sales.index');
+        ->middleware('api.guard:sales,read')->name('api.v1.sales.index');
     Route::get('/sales/{sale}', [\App\Http\Controllers\Api\V1\SaleController::class, 'show'])
-        ->name('api.v1.sales.show');
+        ->middleware('api.guard:sales,read')->name('api.v1.sales.show');
 
     Route::get('/purchases', [\App\Http\Controllers\Api\V1\PurchaseController::class, 'index'])
-        ->name('api.v1.purchases.index');
+        ->middleware('api.guard:purchases,read')->name('api.v1.purchases.index');
     Route::get('/purchases/{purchase}', [\App\Http\Controllers\Api\V1\PurchaseController::class, 'show'])
-        ->name('api.v1.purchases.show');
+        ->middleware('api.guard:purchases,read')->name('api.v1.purchases.show');
 });

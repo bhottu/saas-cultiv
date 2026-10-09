@@ -107,7 +107,7 @@ class PremiumNavLockTest extends TestCase
         $sidebar = $this->sidebar();
 
         // Visible and still clickable: the label is neither hidden nor blurred.
-        foreach (['Advanced Reports', 'Analytics', 'Audit Log', 'API Tokens'] as $label) {
+        foreach (['Advanced Reports', 'Analytics', 'Audit Log', 'API Access'] as $label) {
             $this->assertStringContainsString($label, $sidebar);
         }
 
@@ -123,19 +123,20 @@ class PremiumNavLockTest extends TestCase
         // The hint names the plans that actually include the feature (UsageService is the
         // single source for that mapping, shared with the server-side enforcement message).
         $this->assertStringContainsString('Included in Pro and Business plans. Upgrade to unlock it.', $sidebar);
-        $this->assertStringContainsString('Included in Business plans. Upgrade to unlock it.', $sidebar);
+        $this->assertStringContainsString('Included in Starter, Pro, and Business plans. Upgrade to unlock it.', $sidebar);
     }
 
     public function test_each_plan_only_locks_what_it_does_not_include(): void
     {
-        // Pro has advanced reports, analytics and the audit log — but not API access.
+        // Pro has advanced reports, analytics, the audit log AND API Access (every
+        // paid plan carries it), so nothing in this group is locked for Pro.
         $this->subscribe('pro');
         $sidebar = $this->sidebar();
 
-        $this->assertLockMarked($sidebar, [route('tokens.index')]);
-        $this->assertSame(1, substr_count($sidebar, 'data-plan-locked="1"'));
+        $this->assertLockMarked($sidebar, []);
+        $this->assertSame(0, substr_count($sidebar, 'data-plan-locked="1"'));
 
-        foreach ([route('reports.index'), route('analytics.index'), route('audit-logs.index')] as $href) {
+        foreach ([route('reports.index'), route('analytics.index'), route('audit-logs.index'), route('tokens.index')] as $href) {
             $this->assertStringContainsString('href="'.$href.'"', $sidebar);
         }
     }
@@ -163,7 +164,7 @@ class PremiumNavLockTest extends TestCase
 
         // API tokens render a page (with the upgrade notice), but creating one is refused.
         $this->asOwner()->get('/tokens')->assertOk()
-            ->assertSee('API Access is available on the Business plan.', false);
+            ->assertSee('API Access is available on the Starter, Pro, and Business plans.', false);
         $this->asOwner()->post('/tokens', ['name' => 'CLI'])->assertForbidden();
         $this->assertSame(0, $this->owner->tokens()->count());
     }

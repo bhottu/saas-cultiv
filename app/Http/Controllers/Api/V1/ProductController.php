@@ -4,7 +4,10 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Resources\ProductResource;
 use App\Models\Product;
+use App\Services\AuditLogger;
+use App\Services\UsageService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class ProductController extends ApiController
 {
@@ -88,5 +91,106 @@ class ProductController extends ApiController
     private static function moneyContract(): array
     {
         return ['currency' => 'IDR', 'money_unit' => 'cents'];
+    }
+
+    /**
+     * Create a product (§15): the SAME validation, the SAME per-tenant uniqueness and
+     * the SAME metered `max_products` ceiling the web form enforces — no second,
+     * laxer business path for API clients.
+     *
+     * tenant_id is never accepted from the payload; BelongsToTenant stamps it from the
+     * token's workspace, so this endpoint cannot write into another workspace (§2).
+     */
+    public function store(Request $request)
+    {
+        $this->auth->authorize('products.create');
+
+        $tenant = $this->tenant($request);
+        $validated = $request->validate($this->writeRules($tenant));
+
+        app(UsageService::class)->enforce($tenant, 'max_products');
+
+        $product = Product::create($this->writeAttributes($validated));
+
+        AuditLogger::log('product.created', $product, ['name' => $product->name, 'sku' => $product->sku]);
+
+        return ProductResource::make($product)
+            ->additional([...self::moneyContract(), 'message' => 'Product created.'])
+            ->response()
+            ->setStatusCode(201);
+    }
+
+    /** Update a product (PUT/PATCH). Foreign workspace id ⇒ 404 through tenant scope. */
+    public function update(Request $request, int $product)
+    {
+        $this->auth->authorize('products.update');
+
+        $tenant = $this->tenant($request);
+        $model = Product::query()->findOrFail($product);
+
+        $validated = $request->validate($this->writeRules($tenant, $model));
+
+        $model->update($this->writeAttributes($validated));
+
+        AuditLogger::log('product.updated', $model, ['name' => $model->name, 'sku' => $model->sku]);
+
+        return ProductResource::make($model)
+            ->additional([...self::moneyContract(), 'message' => 'Product updated.']);
+    }
+
+    /**
+     * Web rules with ONE deliberate unit difference: this API's response meta declares
+     * `money_unit: cents`, so money fields are accepted as integer cents (the web form
+     * takes display amounts and converts through Money). Everything else — per-tenant
+     * SKU/barcode uniqueness and tenant-owned category/brand existence — is the very
+     * same rule object the web controller uses, not a copy that can drift from it.
+     */
+    private function writeRules($tenant, ?Product $product = null): array
+    {
+        $unique = fn (string $column) => Rule::unique('products', $column)
+            ->where(fn ($query) => $query->where('tenant_id', $tenant->id))
+            ->ignore($product?->id);
+
+        $owned = fn (string $table) => Rule::exists($table, 'id')
+            ->where(fn ($query) => $query->where('tenant_id', $tenant->id));
+
+        return [
+            'name' => 'required|string|max:255',
+            'sku' => ['nullable', 'string', 'max:60', $unique('sku')],
+            'barcode' => ['nullable', 'string', 'max:100', $unique('barcode')],
+            'category_id' => ['nullable', 'integer', $owned('categories')],
+            'brand_id' => ['nullable', 'integer', $owned('brands')],
+            'description' => 'nullable|string|max:65535',
+            'unit' => 'required|string|max:30',
+            'purchase_price' => 'nullable|integer|min:0|max:10000000000',
+            'selling_price' => 'nullable|integer|min:0|max:10000000000',
+            'cost_price' => 'nullable|integer|min:0|max:10000000000',
+            'minimum_stock' => 'nullable|integer|min:0|max:100000000',
+            'max_stock' => 'nullable|integer|min:0|max:100000000',
+            'track_inventory' => 'boolean',
+            'is_active' => 'boolean',
+        ];
+    }
+
+    /** Map validated input onto storable attributes — same cost fallback as the web. */
+    private function writeAttributes(array $validated): array
+    {
+        return [
+            'name' => $validated['name'],
+            'sku' => $validated['sku'] ?? null,
+            'barcode' => $validated['barcode'] ?? null,
+            'category_id' => $validated['category_id'] ?? null,
+            'brand_id' => $validated['brand_id'] ?? null,
+            'description' => $validated['description'] ?? null,
+            'unit' => $validated['unit'] ?? 'pcs',
+            'purchase_price' => (int) ($validated['purchase_price'] ?? 0),
+            'selling_price' => (int) ($validated['selling_price'] ?? 0),
+            // Cost falls back to the purchase price (reports/AVCO) — as on the web.
+            'cost_price' => (int) ($validated['cost_price'] ?? $validated['purchase_price'] ?? 0),
+            'minimum_stock' => (int) ($validated['minimum_stock'] ?? 0),
+            'max_stock' => isset($validated['max_stock']) ? (int) $validated['max_stock'] : null,
+            'track_inventory' => (bool) ($validated['track_inventory'] ?? false),
+            'is_active' => (bool) ($validated['is_active'] ?? false),
+        ];
     }
 }
