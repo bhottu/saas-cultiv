@@ -9,5 +9,6 @@ final class AiToolResult
     public function __construct(
         public readonly string $content,
         public readonly ?AiPendingAction $pendingAction = null,
+        public readonly bool $requiresFollowUp = false,
     ) {}
 }

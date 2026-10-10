@@ -31,6 +31,14 @@ class BusinessAiTools
     {
         return [
             [
+                'name' => 'get_workspace_info',
+                'description' => 'Read the name of the currently linked and verified workspace. Use for questions about the current workspace identity.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => new \stdClass,
+                ],
+            ],
+            [
                 'name' => 'search_products',
                 'description' => 'Search active products by name, SKU or barcode.',
                 'parameters' => [
@@ -61,7 +69,7 @@ class BusinessAiTools
             ],
             [
                 'name' => 'search_customers',
-                'description' => 'Search active workspace customers by name or phone.',
+                'description' => 'Search active workspace customers by name or phone. Use when the user asks to find a customer or to identify a customer for a sale draft. Return the matching records; never create a customer as a side effect of searching.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => ['query' => ['type' => 'string']],
@@ -70,7 +78,7 @@ class BusinessAiTools
             ],
             [
                 'name' => 'draft_sale',
-                'description' => 'Prepare a sale for user confirmation. Use product IDs from search_products; never set prices.',
+                'description' => 'Prepare a sale draft only when required details are available. You may pass items with product IDs, or product_query and quantity for lookup. If details are incomplete, call this tool with what is known so it can return what is needed next. Resolve supplied customer_query using search_customers; never create or invent a customer. A customer is optional and may be omitted for walk-in. Prices and totals always come from the workspace database. A payment method does not imply that money was received; only pass payment_amount when the user explicitly gives an amount received. A pending draft requires Telegram confirmation before recording the sale.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
@@ -85,14 +93,17 @@ class BusinessAiTools
                                 'required' => ['product_id', 'quantity'],
                             ],
                         ],
+                        'product_query' => ['type' => 'string', 'description' => 'Product name, SKU, or barcode to resolve in the active workspace'],
+                        'quantity' => ['type' => 'integer', 'description' => 'Requested number of units for product_query'],
                         'customer_id' => ['type' => 'integer'],
+                        'customer_query' => ['type' => 'string', 'description' => 'Existing customer name or phone to resolve in the active workspace'],
+                        'customer_phone' => ['type' => 'string', 'description' => 'Phone supplied by user; verify against an existing customer only'],
                         'payment_method' => [
                             'type' => 'string',
                             'enum' => array_keys(config('business.sales.payment_methods', [])),
                         ],
                         'payment_amount' => ['type' => 'number', 'description' => 'Amount received in the workspace currency; omit when not yet paid.'],
                     ],
-                    'required' => ['items'],
                 ],
             ],
         ];
@@ -115,6 +126,7 @@ class BusinessAiTools
             );
 
             $result = match ($name) {
+                'get_workspace_info' => $this->workspaceInfo(),
                 'search_products' => $this->searchProducts($arguments),
                 'get_stock' => $this->getStock($arguments),
                 'get_sales_summary' => $this->salesSummary($arguments),
@@ -153,11 +165,25 @@ class BusinessAiTools
         }
     }
 
+    private function workspaceInfo(): AiToolResult
+    {
+        $tenant = $this->context->tenant();
+
+        return new AiToolResult(json_encode([
+            'status' => 'workspace_found',
+            'name' => $tenant->name,
+        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
+    }
+
     private function searchProducts(array $arguments): AiToolResult
     {
         $this->authorization->authorize('products.view');
         $data = Validator::make($arguments, ['query' => ['required', 'string', 'min:1', 'max:100']])->validate();
-        $products = Product::query()->where('is_active', true)->search($data['query'])
+        $query = trim($data['query']);
+        if ($query === '') {
+            throw ValidationException::withMessages(['query' => __('The search term must contain non-whitespace characters.')]);
+        }
+        $products = Product::query()->where('is_active', true)->search($query)
             ->orderBy('name')->limit(10)->get(['id', 'name', 'sku', 'barcode', 'selling_price']);
 
         return new AiToolResult($products->map(fn (Product $product) => [
@@ -185,14 +211,15 @@ class BusinessAiTools
                     'message' => __('No active product was found in this workspace.'),
                 ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
             }
-        } elseif (! empty($data['query'])) {
-            $matches = $productQuery->search($data['query'])
+        } elseif (trim((string) ($data['query'] ?? '')) !== '') {
+            $query = trim($data['query']);
+            $matches = $productQuery->search($query)
                 ->orderBy('name')->limit(10)->get(['id', 'name', 'sku', 'barcode']);
 
             if ($matches->isEmpty()) {
                 return new AiToolResult(json_encode([
                     'status' => 'product_not_found',
-                    'query' => $data['query'],
+                    'query' => $query,
                     'message' => __('No active product matched that name, SKU, or barcode.'),
                 ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
             }
@@ -248,26 +275,134 @@ class BusinessAiTools
     {
         $this->authorization->authorize('customers.view');
         $data = Validator::make($arguments, ['query' => ['required', 'string', 'min:1', 'max:100']])->validate();
-        $needle = '%'.mb_strtolower(trim($data['query'])).'%';
+        $query = trim($data['query']);
+        if ($query === '') {
+            throw ValidationException::withMessages(['query' => __('The search term must contain non-whitespace characters.')]);
+        }
+        $needle = '%'.mb_strtolower($query).'%';
         $customers = Customer::query()->where('is_active', true)
             ->where(fn ($query) => $query->whereRaw('LOWER(name) LIKE ?', [$needle])
                 ->orWhereRaw('LOWER(phone) LIKE ?', [$needle]))
             ->orderBy('name')->limit(10)->get(['id', 'name', 'phone']);
 
-        return new AiToolResult($customers->toJson());
+        return new AiToolResult(json_encode([
+                'status' => $customers->isEmpty() ? 'customer_not_found' : 'customers_found',
+                'customers' => $customers,
+        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
     }
 
     private function draftSale(array $arguments, AiChannelLink $link): AiToolResult
     {
         $this->authorization->authorize('sales.create');
         $data = Validator::make($arguments, [
-            'items' => ['required', 'array', 'min:1', 'max:20'],
+            'items' => ['nullable', 'array', 'min:1', 'max:20'],
             'items.*.product_id' => ['required', 'integer', 'min:1'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:1000000'],
+            'product_query' => ['nullable', 'string', 'min:1', 'max:100'],
+            'quantity' => ['nullable', 'integer', 'min:1', 'max:1000000'],
             'customer_id' => ['nullable', 'integer', 'min:1'],
+            'customer_query' => ['nullable', 'string', 'min:1', 'max:100'],
+            'customer_phone' => ['nullable', 'string', 'max:40'],
             'payment_method' => ['nullable', 'string', 'in:'.implode(',', array_keys(config('business.sales.payment_methods', [])))],
             'payment_amount' => ['nullable', 'numeric', 'min:0'],
         ])->validate();
+
+        foreach (['product_query', 'customer_query', 'customer_phone'] as $field) {
+            if (isset($data[$field])) {
+                $data[$field] = trim($data[$field]);
+                if ($data[$field] === '') {
+                    $data[$field] = null;
+                }
+            }
+        }
+
+        if (! empty($data['customer_id']) || ! empty($data['customer_query']) || ! empty($data['customer_phone'])) {
+            $this->authorization->authorize('customers.view');
+        }
+
+        if (empty($data['items'])) {
+            if (empty($data['product_query'])) {
+                return $this->followUp('missing_product', __('Which product would you like to add, and how many?'));
+            }
+            if (empty($data['quantity'])) {
+                return $this->followUp('missing_quantity', __('How many units of :product should I add?', [
+                    'product' => $data['product_query'],
+                ]));
+            }
+
+            $matches = Product::query()->where('is_active', true)->search($data['product_query'])
+                ->orderBy('name')->limit(10)->get(['id', 'name', 'sku', 'barcode']);
+            if ($matches->isEmpty()) {
+                return $this->followUp('product_not_found', __('I could not find an active product matching :query. Please check the name, SKU, or barcode.', [
+                    'query' => $data['product_query'],
+                ]));
+            }
+            if ($matches->count() > 1) {
+                return $this->followUp('multiple_products_found', __('More than one product matched. Which one should I use?'), [
+                    'products' => $matches->map(fn (Product $product) => [
+                        'id' => $product->id,
+                        'name' => $product->name,
+                        'sku' => $product->sku,
+                        'barcode' => $product->barcode,
+                    ])->values(),
+                ]);
+            }
+
+            $data['items'] = [[
+                'product_id' => $matches->first()->id,
+                'quantity' => $data['quantity'],
+            ]];
+        }
+
+        if (! empty($data['customer_query']) && empty($data['customer_id'])) {
+            $needle = '%'.mb_strtolower(trim($data['customer_query'])).'%';
+            $customers = Customer::query()->where('is_active', true)
+                ->where(fn ($query) => $query->whereRaw('LOWER(name) LIKE ?', [$needle])
+                    ->orWhereRaw('LOWER(phone) LIKE ?', [$needle]))
+                ->orderBy('name')->limit(10)->get(['id', 'name', 'phone']);
+            if ($customers->isEmpty()) {
+                return $this->followUp('customer_not_found', __('I could not find an existing customer named or matching :query. You can choose walk-in, or create the customer in the Customers page first.', [
+                    'query' => $data['customer_query'],
+                ]));
+            }
+            if ($customers->count() > 1) {
+                return $this->followUp('multiple_customers_found', __('More than one customer matched. Which one should I use?'), [
+                    'customers' => $customers->map(fn (Customer $customer) => [
+                        'id' => $customer->id,
+                        'name' => $customer->name,
+                        'phone' => $customer->phone,
+                    ])->values(),
+                ]);
+            }
+
+            $customer = $customers->first();
+            if (! empty($data['customer_phone']) && $this->normalizePhone($customer->phone) !== $this->normalizePhone($data['customer_phone'])) {
+                return $this->followUp('customer_phone_mismatch', __('The phone number provided does not match :name. Please confirm the customer or choose walk-in.', [
+                    'name' => $customer->name,
+                ]));
+            }
+            $data['customer_id'] = $customer->id;
+        }
+
+        if (! empty($data['customer_phone']) && empty($data['customer_id']) && empty($data['customer_query'])) {
+            $phoneNeedle = '%'.mb_strtolower(trim($data['customer_phone'])).'%';
+            $customers = Customer::query()->where('is_active', true)
+                ->whereRaw('LOWER(phone) LIKE ?', [$phoneNeedle])
+                ->orderBy('name')->limit(10)->get(['id', 'name', 'phone']);
+            if ($customers->isEmpty()) {
+                return $this->followUp('customer_not_found', __('I could not find an existing customer with that phone number. You can choose walk-in, or create the customer in the Customers page first.'));
+            }
+            if ($customers->count() > 1) {
+                return $this->followUp('multiple_customers_found', __('More than one customer matched that phone number. Which one should I use?'), [
+                    'customers' => $customers->map(fn (Customer $customer) => [
+                        'id' => $customer->id,
+                        'name' => $customer->name,
+                        'phone' => $customer->phone,
+                    ])->values(),
+                ]);
+            }
+            $data['customer_id'] = $customers->first()->id;
+        }
 
         $tenant = $this->context->tenant();
         $products = Product::query()->where('is_active', true)
@@ -370,5 +505,19 @@ class BusinessAiTools
             ]),
             $action,
         );
+    }
+
+    private function followUp(string $status, string $message, array $data = []): AiToolResult
+    {
+        return new AiToolResult(json_encode([
+            'status' => $status,
+            'message' => $message,
+            ...$data,
+        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE), requiresFollowUp: true);
+    }
+
+    private function normalizePhone(?string $phone): string
+    {
+        return preg_replace('/\D+/', '', $phone ?? '') ?? '';
     }
 }

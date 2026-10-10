@@ -89,7 +89,7 @@ class AiTelegramWebhookController extends Controller
                     'workspace' => $link->tenant->name,
                 ]));
             } else {
-                $this->sendUnlinked($telegramUserId, __('That link code is invalid or expired. Create a new code in workspace settings.'));
+                $this->sendUnlinked($telegramUserId, __('That link code is invalid or expired, or this Telegram account is already linked. Unlink it from the current workspace settings before linking it to another workspace.'));
             }
 
             return;

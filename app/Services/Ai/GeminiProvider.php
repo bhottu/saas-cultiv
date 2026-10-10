@@ -29,13 +29,17 @@ class GeminiProvider implements AiProvider
 
             $role = $message['role'] === 'assistant' ? 'model' : 'user';
             if ($message['role'] === 'tool') {
-                $result = json_decode((string) ($message['content'] ?? ''), true);
+                $toolContent = (string) ($message['content'] ?? '');
+                $result = json_decode($toolContent, true);
+                $isJsonObject = str_starts_with(ltrim($toolContent), '{');
                 $contents[] = [
                     'role' => 'user',
                     'parts' => [[
                         'functionResponse' => [
                             'name' => $message['name'],
-                            'response' => is_array($result) ? $result : ['result' => (string) $message['content']],
+                            'response' => $isJsonObject && is_array($result)
+                                ? $result
+                                : ['result' => $result ?? $toolContent],
                         ],
                     ]],
                 ];
@@ -181,9 +185,13 @@ class GeminiProvider implements AiProvider
             }
         }
         if (isset($schema['properties'])) {
-            $mapped['properties'] = [];
-            foreach ($schema['properties'] as $name => $property) {
-                $mapped['properties'][$name] = $this->geminiSchema($property);
+            if ($schema['properties'] instanceof \stdClass || $schema['properties'] === []) {
+                $mapped['properties'] = new \stdClass;
+            } else {
+                $mapped['properties'] = [];
+                foreach ($schema['properties'] as $name => $property) {
+                    $mapped['properties'][$name] = $this->geminiSchema($property);
+                }
             }
         }
         if (isset($schema['items'])) {

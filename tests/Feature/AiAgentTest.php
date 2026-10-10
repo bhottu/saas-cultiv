@@ -6,6 +6,7 @@ use App\Exceptions\SubscriptionLimitException;
 use App\Models\AiChannelLink;
 use App\Models\AiPendingAction;
 use App\Models\AiSetting;
+use App\Models\Customer;
 use App\Models\Module;
 use App\Models\Plan;
 use App\Models\Product;
@@ -340,6 +341,77 @@ class AiAgentTest extends TestCase
         $this->assertCount(2, Http::recorded());
     }
 
+    public function test_gemini_encodes_empty_tool_properties_as_an_object(): void
+    {
+        $settings = AiSetting::current();
+        $settings->forceFill([
+            'provider' => 'gemini',
+            'model' => 'gemini-2.5-flash-lite',
+            'gemini_api_key' => 'gemini-schema-test-secret',
+        ])->save();
+        $payload = null;
+        Http::fake(function ($request) use (&$payload) {
+            $payload = json_decode($request->body(), false, 512, JSON_THROW_ON_ERROR);
+
+            return Http::response([
+                'candidates' => [['content' => ['parts' => [['text' => 'Workspace: Cultiv.']]]]],
+            ]);
+        });
+
+        (new GeminiProvider($settings, 'gemini-2.5-flash-lite'))->complete(
+            [['role' => 'user', 'content' => 'What is my workspace name?']],
+            app(BusinessAiTools::class)->definitions(),
+        );
+
+        $properties = $payload->tools[0]->functionDeclarations[0]->parameters->properties;
+        $this->assertInstanceOf(\stdClass::class, $properties);
+        $this->assertEquals(new \stdClass, $properties);
+    }
+
+    public function test_gemini_wraps_list_tool_results_in_the_object_required_by_function_response(): void
+    {
+        $settings = AiSetting::current();
+        $settings->forceFill([
+            'provider' => 'gemini',
+            'model' => 'gemini-2.5-flash-lite',
+            'gemini_api_key' => 'gemini-tool-response-secret',
+        ])->save();
+        $payload = null;
+        Http::fake(function ($request) use (&$payload) {
+            $payload = $request->data();
+
+            return Http::response([
+                'candidates' => [['content' => ['parts' => [['text' => 'Found products.']]]]],
+            ]);
+        });
+
+        $response = (new GeminiProvider($settings, 'gemini-2.5-flash-lite'))->complete([
+            ['role' => 'user', 'content' => 'Find products'],
+            [
+                'role' => 'assistant',
+                'content' => '',
+                'provider_metadata' => [
+                    'gemini_content_parts' => [[
+                        'functionCall' => ['name' => 'search_products', 'args' => ['query' => 'coffee']],
+                    ]],
+                ],
+            ],
+            [
+                'role' => 'tool',
+                'name' => 'search_products',
+                'content' => json_encode([['id' => 1, 'name' => 'Arabica Coffee']], JSON_THROW_ON_ERROR),
+            ],
+        ], []);
+
+        $functionResponse = $payload['contents'][2]['parts'][0]['functionResponse'];
+        $this->assertSame('search_products', $functionResponse['name']);
+        $this->assertSame(
+            [['id' => 1, 'name' => 'Arabica Coffee']],
+            $functionResponse['response']['result'],
+        );
+        $this->assertSame('Found products.', $response->text);
+    }
+
     public function test_gemini_tool_call_checks_stock_and_returns_the_tool_result_for_a_final_answer(): void
     {
         $this->contextAsOwner();
@@ -453,6 +525,143 @@ class AiAgentTest extends TestCase
         $this->assertCount(2, $ambiguous['products']);
     }
 
+    public function test_workspace_and_customer_tools_use_the_verified_workspace_and_sale_drafts_ask_for_missing_details(): void
+    {
+        $this->contextAsOwner();
+        $link = AiChannelLink::create([
+            'tenant_id' => $this->tenant->id,
+            'user_id' => $this->owner->id,
+            'channel' => 'telegram',
+            'external_id' => 'telegram-context-aware-tools',
+            'linked_at' => now(),
+        ]);
+        $tools = app(BusinessAiTools::class);
+        $blankCustomerSearch = json_decode($tools->execute('search_customers', ['query' => '   '], $link)->content, true);
+        $this->assertSame('invalid_arguments', $blankCustomerSearch['status']);
+
+        $workspace = json_decode($tools->execute('get_workspace_info', [], $link)->content, true);
+        $this->assertSame('workspace_found', $workspace['status']);
+        $this->assertSame('AI Workspace', $workspace['name']);
+
+        $missingProduct = $tools->execute('draft_sale', [], $link);
+        $this->assertTrue($missingProduct->requiresFollowUp);
+        $this->assertSame('missing_product', json_decode($missingProduct->content, true)['status']);
+
+        $missingQuantity = $tools->execute('draft_sale', ['product_query' => 'Arabica Coffee'], $link);
+        $this->assertTrue($missingQuantity->requiresFollowUp);
+        $this->assertSame('missing_quantity', json_decode($missingQuantity->content, true)['status']);
+        $notFoundProduct = $tools->execute('draft_sale', [
+            'product_query' => 'unknown item',
+            'quantity' => 1,
+        ], $link);
+        $this->assertTrue($notFoundProduct->requiresFollowUp);
+        $this->assertSame('product_not_found', json_decode($notFoundProduct->content, true)['status']);
+
+        Customer::create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Maya Customer',
+            'phone' => '+628123456789',
+            'is_active' => true,
+        ]);
+        $customerSearch = json_decode($tools->execute('search_customers', ['query' => 'Maya'], $link)->content, true);
+        $this->assertSame('customers_found', $customerSearch['status']);
+        $this->assertSame('Maya Customer', $customerSearch['customers'][0]['name']);
+
+        $draft = $tools->execute('draft_sale', [
+            'product_query' => 'COF-001',
+            'quantity' => 2,
+            'customer_query' => 'Maya Customer',
+            'customer_phone' => '+628123456789',
+        ], $link);
+        $this->assertNotNull($draft->pendingAction);
+        $this->assertSame($this->product->id, $draft->pendingAction->payload['items'][0]['product_id']);
+        $this->assertSame(2, $draft->pendingAction->payload['items'][0]['quantity']);
+        $this->assertSame($customerSearch['customers'][0]['id'], $draft->pendingAction->payload['customer_id']);
+        $this->assertSame(0, Sale::withoutGlobalScopes()->count());
+    }
+
+    public function test_gemini_sale_draft_continues_after_a_clarification_across_telegram_messages(): void
+    {
+        $this->contextAsOwner();
+        $link = AiChannelLink::create([
+            'tenant_id' => $this->tenant->id,
+            'user_id' => $this->owner->id,
+            'channel' => 'telegram',
+            'external_id' => 'telegram-multi-turn-sale',
+            'linked_at' => now(),
+        ]);
+        AiSetting::current()->forceFill([
+            'provider' => 'gemini',
+            'model' => 'gemini-2.5-flash-lite',
+            'gemini_api_key' => 'gemini-test-key',
+        ])->save();
+
+        $responses = [
+            ['candidates' => [['content' => ['parts' => [[
+                'functionCall' => ['name' => 'draft_sale', 'args' => []],
+            ]]]]]],
+            ['candidates' => [['content' => ['parts' => [['text' => 'Produk apa dan berapa jumlahnya?']]]]]],
+            ['candidates' => [['content' => ['parts' => [[
+                'functionCall' => ['name' => 'draft_sale', 'args' => [
+                    'product_query' => 'COF-001',
+                    'quantity' => 2,
+                ]],
+            ]]]]]],
+        ];
+        $providerRequests = [];
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => function ($request) use (&$responses, &$providerRequests) {
+                $providerRequests[] = $request->data();
+
+                return Http::response(array_shift($responses));
+            },
+        ]);
+
+        $chat = app(\App\Services\Ai\AiChatService::class);
+        $clarification = $chat->respond($link, 'Buat draft penjualan');
+        $this->assertTrue($clarification->requiresFollowUp);
+        $this->assertSame('Produk apa dan berapa jumlahnya?', $clarification->content);
+
+        $draft = $chat->respond($link, '2 Arabica Coffee');
+        $this->assertNotNull($draft->pendingAction);
+        $this->assertSame(2, $draft->pendingAction->payload['items'][0]['quantity']);
+        $this->assertSame(0, Sale::withoutGlobalScopes()->count());
+
+        $secondMessageContents = $providerRequests[2]['contents'];
+        $this->assertSame(['user', 'model', 'user'], array_column($secondMessageContents, 'role'));
+        $this->assertSame('Buat draft penjualan', $secondMessageContents[0]['parts'][0]['text']);
+        $this->assertSame('Produk apa dan berapa jumlahnya?', $secondMessageContents[1]['parts'][0]['text']);
+        $this->assertSame('2 Arabica Coffee', $secondMessageContents[2]['parts'][0]['text']);
+    }
+
+    public function test_ai_chat_retains_a_short_tenant_and_link_scoped_conversation_for_follow_ups(): void
+    {
+        $link = AiChannelLink::create([
+            'tenant_id' => $this->tenant->id,
+            'user_id' => $this->owner->id,
+            'channel' => 'telegram',
+            'external_id' => 'telegram-follow-up-history',
+            'linked_at' => now(),
+        ]);
+        $agent = \Mockery::mock(AiAgent::class);
+        $agent->shouldReceive('respond')->once()
+            ->with('jual Arabica', $link, [])
+            ->andReturn(new \App\Services\Ai\AiToolResult('Berapa jumlahnya?', requiresFollowUp: true));
+        $agent->shouldReceive('respond')->once()
+            ->with('2', $link, [
+                ['role' => 'user', 'content' => 'jual Arabica'],
+                ['role' => 'assistant', 'content' => 'Berapa jumlahnya?'],
+            ])
+            ->andReturn(new \App\Services\Ai\AiToolResult('Baik, 2 Arabica.'));
+        $this->app->instance(AiAgent::class, $agent);
+
+        $chat = app(\App\Services\Ai\AiChatService::class);
+        $chat->respond($link, 'jual Arabica');
+        $reply = $chat->respond($link, '2');
+
+        $this->assertSame('Baik, 2 Arabica.', $reply->content);
+    }
+
     public function test_ai_agent_handles_empty_provider_responses_and_stops_tool_loops(): void
     {
         $this->contextAsOwner();
@@ -513,6 +722,13 @@ class AiAgentTest extends TestCase
             'role' => 'Owner', 'status' => 'active', 'joined_at' => now(),
         ]);
         app(TenantContext::class)->set($foreignTenant, $foreignOwner);
+
+        try {
+            app(BusinessAiTools::class)->execute('get_workspace_info', [], $link);
+            $this->fail('Expected workspace identity to remain bound to the linked workspace.');
+        } catch (HttpExceptionInterface $error) {
+            $this->assertSame(403, $error->getStatusCode());
+        }
 
         try {
             app(BusinessAiTools::class)->execute('get_stock', ['product_id' => $this->product->id], $link);
@@ -989,6 +1205,9 @@ MESSAGE;
         $this->assertNotSame($code, $pending->link_token_hash);
         $this->assertTrue(app(TelegramLinkService::class)->redeem($code, 'telegram-user-1'));
         $this->assertFalse(app(TelegramLinkService::class)->redeem($code, 'telegram-user-2'));
+        $this->assertSame('telegram-user-1', $pending->fresh()->external_id);
+        $replacementCode = app(TelegramLinkService::class)->createCode($this->tenant->id, $this->owner->id);
+        $this->assertFalse(app(TelegramLinkService::class)->redeem($replacementCode, 'telegram-user-1'));
         $this->assertSame('telegram-user-1', $pending->fresh()->external_id);
         $this->assertDatabaseHas('audit_logs', ['action' => 'ai.telegram.link_code_issued']);
     }
