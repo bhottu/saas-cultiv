@@ -11,6 +11,7 @@
         "laravel/sanctum": "^4.3",
         "laravel/socialite": "^5.31",
         "laravel/tinker": "^2.10.1",
+        "league/commonmark": "^2.8.1",
         "resend/resend-php": "^1.16"
     },
     "require-dev": {

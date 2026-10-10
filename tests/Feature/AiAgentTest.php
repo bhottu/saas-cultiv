@@ -2,10 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Exceptions\SubscriptionLimitException;
 use App\Models\AiChannelLink;
 use App\Models\AiPendingAction;
 use App\Models\AiSetting;
-use App\Models\AuditLog;
 use App\Models\Module;
 use App\Models\Plan;
 use App\Models\Product;
@@ -13,22 +13,33 @@ use App\Models\Sale;
 use App\Models\StockBalance;
 use App\Models\Tenant;
 use App\Models\TenantModule;
-use App\Models\User;
 use App\Models\UsageRecord;
+use App\Models\User;
 use App\Models\Warehouse;
+use App\Services\Ai\AiAgent;
 use App\Services\Ai\AiPendingSaleService;
+use App\Services\Ai\AiProviderException;
 use App\Services\Ai\AiProviderManager;
+use App\Services\Ai\AiProviderResponse;
 use App\Services\Ai\BusinessAiTools;
+use App\Services\Ai\GeminiProvider;
 use App\Services\Ai\TelegramClient;
+use App\Services\Ai\TelegramHtmlFormatter;
 use App\Services\Ai\TelegramLinkService;
 use App\Services\ModuleManager;
 use App\Services\TenantContext;
+use App\Services\UsageService;
+use Database\Seeders\ModuleSeeder;
+use Database\Seeders\PlanSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Tests\TestCase;
 
 class AiAgentTest extends TestCase
@@ -36,15 +47,18 @@ class AiAgentTest extends TestCase
     use RefreshDatabase;
 
     private User $owner;
+
     private Tenant $tenant;
+
     private Product $product;
+
     private Warehouse $warehouse;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->seed(\Database\Seeders\ModuleSeeder::class);
-        $this->seed(\Database\Seeders\PlanSeeder::class);
+        $this->seed(ModuleSeeder::class);
+        $this->seed(PlanSeeder::class);
 
         $this->owner = User::create([
             'name' => 'AI Owner',
@@ -111,7 +125,7 @@ class AiAgentTest extends TestCase
 
     public function test_admin_ai_page_creates_the_default_platform_configuration(): void
     {
-        $this->assertTrue(\Illuminate\Support\Facades\Schema::hasTable('ai_settings'));
+        $this->assertTrue(Schema::hasTable('ai_settings'));
         AiSetting::query()->delete();
 
         $admin = User::create([
@@ -312,27 +326,321 @@ class AiAgentTest extends TestCase
         $settings = AiSetting::current();
         $settings->forceFill([
             'provider' => 'gemini',
-            'model' => 'gemini-3.8-flash',
+            'model' => 'gemini-2.5-flash-lite',
             'gemini_api_key' => 'gemini-retry-test-secret',
         ])->save();
         Http::fakeSequence('generativelanguage.googleapis.com/*')
             ->push(['error' => ['status' => 'UNAVAILABLE', 'message' => 'Temporary overload.']], 503)
             ->push(['candidates' => [['content' => ['parts' => [['text' => 'OK']]]]]], 200);
 
-        $response = (new \App\Services\Ai\GeminiProvider($settings, 'gemini-3.8-flash'))
+        $response = (new GeminiProvider($settings, 'gemini-2.5-flash-lite'))
             ->complete([['role' => 'user', 'content' => 'Reply with the single word OK.']], []);
 
         $this->assertSame('OK', $response->text);
         $this->assertCount(2, Http::recorded());
     }
 
+    public function test_gemini_tool_call_checks_stock_and_returns_the_tool_result_for_a_final_answer(): void
+    {
+        $this->contextAsOwner();
+        $link = AiChannelLink::create([
+            'tenant_id' => $this->tenant->id,
+            'user_id' => $this->owner->id,
+            'channel' => 'telegram',
+            'external_id' => '91002',
+            'linked_at' => now(),
+        ]);
+        AiSetting::current()->forceFill([
+            'provider' => 'gemini',
+            'model' => 'gemini-2.5-flash-lite',
+            'gemini_api_key' => 'gemini-tool-test-secret',
+            'fallback_provider' => null,
+            'fallback_model' => null,
+            'telegram_bot_token' => '91002:bot-secret',
+            'telegram_webhook_secret' => 'webhook-secret',
+        ])->save();
+
+        $providerPayloads = [];
+        Http::fake(function ($request) use (&$providerPayloads) {
+            if (str_contains($request->url(), 'generativelanguage.googleapis.com')) {
+                $providerPayloads[] = $request->data();
+                if (count($providerPayloads) === 1) {
+                    return Http::response([
+                        'candidates' => [[
+                            'content' => ['parts' => [[
+                                'functionCall' => [
+                                    'name' => 'get_stock',
+                                    'args' => ['query' => 'Arabica Coffee'],
+                                ],
+                                'thoughtSignature' => 'gemini-thought-signature',
+                            ]]],
+                        ]],
+                    ]);
+                }
+
+                return Http::response([
+                    'candidates' => [['content' => ['parts' => [['text' => 'Arabica Coffee has 8 units in Main Warehouse.']]]]],
+                ]);
+            }
+
+            return Http::response(['ok' => true, 'result' => []]);
+        });
+
+        $this->postJson('/api/ai/telegram/webhook', [
+            'update_id' => 22011,
+            'message' => [
+                'chat' => ['id' => 91002, 'type' => 'private'],
+                'from' => ['id' => 91002, 'is_bot' => false],
+                'text' => 'Berapa stok Arabica Coffee?',
+            ],
+        ], ['X-Telegram-Bot-Api-Secret-Token' => 'webhook-secret'])->assertOk();
+
+        $this->assertCount(2, $providerPayloads);
+        $this->assertContains('get_stock', array_column(
+            $providerPayloads[0]['tools'][0]['functionDeclarations'],
+            'name',
+        ));
+        $this->assertSame(
+            'gemini-thought-signature',
+            $providerPayloads[1]['contents'][1]['parts'][0]['thoughtSignature'],
+        );
+        $functionResponse = $providerPayloads[1]['contents'][2]['parts'][0]['functionResponse'];
+        $this->assertSame('get_stock', $functionResponse['name']);
+        $this->assertSame('stock_found', $functionResponse['response']['status']);
+        $this->assertSame(8, $functionResponse['response']['stock_by_warehouse'][0]['quantity']);
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'api.telegram.org')
+            && ($request->data()['text'] ?? null) === 'Arabica Coffee has 8 units in Main Warehouse.');
+    }
+
+    public function test_gemini_tool_call_without_a_product_returns_a_clarification_and_distinguishes_stock_lookup_results(): void
+    {
+        $this->contextAsOwner();
+        $link = AiChannelLink::create([
+            'tenant_id' => $this->tenant->id,
+            'user_id' => $this->owner->id,
+            'channel' => 'telegram',
+            'external_id' => 'telegram-stock-clarification',
+            'linked_at' => now(),
+        ]);
+        $tools = app(BusinessAiTools::class);
+
+        $clarification = json_decode($tools->execute('get_stock', [], $link)->content, true);
+        $this->assertSame('product_required', $clarification['status']);
+        $this->assertStringContainsString('Which product', $clarification['message']);
+        $invalid = json_decode($tools->execute('get_stock', ['query' => str_repeat('x', 101)], $link)->content, true);
+        $this->assertSame('invalid_arguments', $invalid['status']);
+        $unknown = json_decode($tools->execute('unknown_tool', [], $link)->content, true);
+        $this->assertSame('unsupported_tool', $unknown['status']);
+
+        $stock = json_decode($tools->execute('get_stock', ['query' => 'COF-001'], $link)->content, true);
+        $this->assertSame('stock_found', $stock['status']);
+        $this->assertSame('Arabica Coffee', $stock['product']);
+        $this->assertSame(8, $stock['stock_by_warehouse'][0]['quantity']);
+
+        $notFound = json_decode($tools->execute('get_stock', ['query' => 'missing-product'], $link)->content, true);
+        $this->assertSame('product_not_found', $notFound['status']);
+
+        Product::create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Arabica Dark Roast',
+            'sku' => 'COF-002',
+            'selling_price' => 160000,
+            'track_inventory' => true,
+            'is_active' => true,
+        ]);
+        $ambiguous = json_decode($tools->execute('get_stock', ['query' => 'Arabica'], $link)->content, true);
+        $this->assertSame('multiple_products_found', $ambiguous['status']);
+        $this->assertCount(2, $ambiguous['products']);
+    }
+
+    public function test_ai_agent_handles_empty_provider_responses_and_stops_tool_loops(): void
+    {
+        $this->contextAsOwner();
+        $link = AiChannelLink::create([
+            'tenant_id' => $this->tenant->id,
+            'user_id' => $this->owner->id,
+            'channel' => 'telegram',
+            'external_id' => 'telegram-agent-edge-cases',
+            'linked_at' => now(),
+        ]);
+        $emptyProvider = \Mockery::mock(AiProviderManager::class);
+        $emptyProvider->shouldReceive('complete')->once()
+            ->andReturn(new AiProviderResponse(null));
+        $emptyAgent = new AiAgent($emptyProvider, app(BusinessAiTools::class));
+        $this->assertSame(
+            __('I could not prepare a response. Please try again.'),
+            $emptyAgent->respond('Hello', $link)->content,
+        );
+
+        $loopProvider = \Mockery::mock(AiProviderManager::class);
+        $loopProvider->shouldReceive('complete')->times(4)->andReturn(
+            new AiProviderResponse(null, [[
+                'id' => 'loop-call',
+                'name' => 'search_products',
+                'arguments' => ['query' => 'not-found'],
+            ]]),
+        );
+        $loopAgent = new AiAgent($loopProvider, app(BusinessAiTools::class));
+        $this->assertSame(
+            __('I could not complete that request. Please try a simpler question.'),
+            $loopAgent->respond('Find not-found', $link)->content,
+        );
+    }
+
+    public function test_ai_tool_rejects_a_telegram_link_used_with_another_workspace_context(): void
+    {
+        $this->contextAsOwner();
+        $link = AiChannelLink::create([
+            'tenant_id' => $this->tenant->id,
+            'user_id' => $this->owner->id,
+            'channel' => 'telegram',
+            'external_id' => 'telegram-workspace-boundary',
+            'linked_at' => now(),
+        ]);
+        $foreignOwner = User::create([
+            'name' => 'Foreign AI Owner',
+            'email' => 'foreign-ai-owner@test.dev',
+            'password' => Hash::make('password'),
+            'email_verified_at' => now(),
+        ]);
+        $foreignTenant = Tenant::create([
+            'name' => 'Foreign AI Workspace',
+            'slug' => 'foreign-ai-workspace',
+            'owner_id' => $foreignOwner->id,
+            'status' => 'active',
+        ]);
+        $foreignTenant->users()->attach($foreignOwner->id, [
+            'role' => 'Owner', 'status' => 'active', 'joined_at' => now(),
+        ]);
+        app(TenantContext::class)->set($foreignTenant, $foreignOwner);
+
+        try {
+            app(BusinessAiTools::class)->execute('get_stock', ['product_id' => $this->product->id], $link);
+            $this->fail('Expected a cross-workspace tool call to be rejected.');
+        } catch (HttpExceptionInterface $error) {
+            $this->assertSame(403, $error->getStatusCode());
+        }
+    }
+
+    public function test_ai_provider_failure_is_logged_with_safe_diagnostics_and_a_user_safe_message(): void
+    {
+        AiChannelLink::create([
+            'tenant_id' => $this->tenant->id,
+            'user_id' => $this->owner->id,
+            'channel' => 'telegram',
+            'external_id' => '91002',
+            'linked_at' => now(),
+        ]);
+        AiSetting::current()->forceFill([
+            'provider' => 'gemini',
+            'model' => 'gemini-2.5-flash-lite',
+            'gemini_api_key' => 'gemini-provider-test-secret',
+            'fallback_provider' => null,
+            'fallback_model' => null,
+            'telegram_bot_token' => '91002:bot-secret',
+            'telegram_webhook_secret' => 'webhook-secret',
+        ])->save();
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'error' => [
+                    'status' => 'INVALID_ARGUMENT',
+                    'message' => 'Rejected gemini-provider-test-secret',
+                ],
+            ], 400),
+            'api.telegram.org/*' => Http::response(['ok' => true, 'result' => []]),
+        ]);
+        Log::spy();
+
+        $this->postJson('/api/ai/telegram/webhook', [
+            'update_id' => 22012,
+            'message' => [
+                'chat' => ['id' => 91002, 'type' => 'private'],
+                'from' => ['id' => 91002, 'is_bot' => false],
+                'text' => 'Halo cultiv',
+            ],
+        ], ['X-Telegram-Bot-Api-Secret-Token' => 'webhook-secret'])->assertOk();
+        $telegramTexts = Http::recorded(fn ($request) => str_contains($request->url(), 'api.telegram.org'))
+            ->map(fn (array $pair) => $pair[0]->data()['text'] ?? '')
+            ->all();
+        $this->assertContains(
+            __('The AI service is temporarily unavailable. Please try again later.'),
+            $telegramTexts,
+            json_encode($telegramTexts),
+        );
+        Log::shouldHaveReceived('warning')->withArgs(function (string $message, array $context): bool {
+            return $message === 'ai.assistant.provider_failed'
+                && ($context['provider'] ?? null) === 'gemini'
+                && ($context['model'] ?? null) === 'gemini-2.5-flash-lite'
+                && ($context['provider_status'] ?? null) === 400
+                && ($context['provider_api_status'] ?? null) === 'INVALID_ARGUMENT'
+                && ! str_contains(json_encode($context), 'gemini-provider-test-secret');
+        })->once();
+    }
+
+    public function test_ai_provider_timeout_is_reported_safely_to_telegram(): void
+    {
+        AiChannelLink::create([
+            'tenant_id' => $this->tenant->id,
+            'user_id' => $this->owner->id,
+            'channel' => 'telegram',
+            'external_id' => '91002',
+            'linked_at' => now(),
+        ]);
+        AiSetting::current()->forceFill([
+            'provider' => 'gemini',
+            'model' => 'gemini-2.5-flash-lite',
+            'gemini_api_key' => 'gemini-timeout-test-secret',
+            'fallback_provider' => null,
+            'fallback_model' => null,
+            'telegram_bot_token' => '91002:bot-secret',
+            'telegram_webhook_secret' => 'webhook-secret',
+        ])->save();
+        $provider = \Mockery::mock(AiProviderManager::class);
+        $provider->shouldReceive('complete')->once()->andThrow(
+            new AiProviderException(
+                'gemini',
+                'gemini-2.5-flash-lite',
+                'transport_failure',
+                transportType: 'request_timeout',
+                elapsedMilliseconds: 35000,
+            ),
+        );
+        $this->app->instance(AiProviderManager::class, $provider);
+        Http::fake(['api.telegram.org/*' => Http::response(['ok' => true, 'result' => []])]);
+        Log::spy();
+
+        $this->postJson('/api/ai/telegram/webhook', [
+            'update_id' => 22013,
+            'message' => [
+                'chat' => ['id' => 91002, 'type' => 'private'],
+                'from' => ['id' => 91002, 'is_bot' => false],
+                'text' => 'Cek stok',
+            ],
+        ], ['X-Telegram-Bot-Api-Secret-Token' => 'webhook-secret'])->assertOk();
+
+        $telegramTexts = Http::recorded(fn ($request) => str_contains($request->url(), 'api.telegram.org'))
+            ->map(fn (array $pair) => $pair[0]->data()['text'] ?? '')
+            ->all();
+        $this->assertContains(
+            __('The AI service is temporarily unavailable. Please try again later.'),
+            $telegramTexts,
+            json_encode($telegramTexts),
+        );
+        Log::shouldHaveReceived('warning')->withArgs(function (string $message, array $context): bool {
+            return $message === 'ai.assistant.provider_failed'
+                && ($context['reason'] ?? null) === 'transport_failure'
+                && ($context['duration_ms'] ?? null) >= 0
+                && ! str_contains(json_encode($context), 'gemini-timeout-test-secret');
+        })->once();
+    }
+
     public function test_gemini_transport_diagnostics_classify_curl_timeout_without_exposing_credentials(): void
     {
-        $exception = \App\Services\Ai\AiProviderException::transportFailure(
+        $exception = AiProviderException::transportFailure(
             'gemini',
-            'gemini-3.8-flash',
-            new \Illuminate\Http\Client\ConnectionException(
-                'cURL error 28: Operation timed out after 35001 milliseconds with 0 bytes received for https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=diagnostic-secret',
+            'gemini-2.5-flash-lite',
+            new ConnectionException(
+                'cURL error 28: Operation timed out after 35001 milliseconds with 0 bytes received for https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=diagnostic-secret',
             ),
             'diagnostic-secret',
             35010,
@@ -375,7 +683,9 @@ class AiAgentTest extends TestCase
             ->assertSessionHas('status.type', 'error')
             ->assertSessionHas('status.message', __('Connection test failed for :provider: :reason', [
                 'provider' => 'Gemini',
-                'reason' => __('The model or API endpoint was not found.'),
+                'reason' => __('Gemini model :model is unavailable for generateContent. Check that the model ID supports generateContent, for example gemini-2.5-flash-lite.', [
+                    'model' => 'gemini-invalid-model',
+                ]),
             ]).' '.__('Provider error: :status :details', [
                 'status' => __('Unknown status'),
                 'details' => 'Rejected request with [redacted]',
@@ -427,6 +737,132 @@ class AiAgentTest extends TestCase
             ]).' (HTTP 400)');
 
         $this->assertStringNotContainsString('gemini-auth-secret', session('status.message'));
+    }
+
+    public function test_telegram_send_text_renders_markdown_as_safe_telegram_html(): void
+    {
+        AiSetting::current()->forceFill(['telegram_bot_token' => '91002:bot-secret'])->save();
+        Http::fake(['api.telegram.org/*' => Http::response(['ok' => true, 'result' => []])]);
+        $link = new AiChannelLink(['channel' => 'telegram', 'external_id' => '91002']);
+        $message = <<<'MESSAGE'
+**Ringkasan Penjualan**
+
+*Italic text*
+
+1. First numbered item
+2. Second numbered item
+
+- First bullet
+- Second bullet
+
+Inline `code` example.
+
+```php
+if ($stock < 2 && $ready) {
+    echo "low";
+}
+```
+
+[Open report](https://example.com/reports?id=1&kind=sales)
+
+Literal <tag> & symbols; not trusted HTML: <img src=x onerror=alert(1)>
+MESSAGE;
+
+        app(TelegramClient::class)->sendText($link, $message);
+
+        $requests = Http::recorded(fn ($request) => str_contains($request->url(), 'sendMessage'));
+        $this->assertCount(1, $requests);
+        $payload = $requests->first()[0]->data();
+        $html = $payload['text'];
+        $this->assertSame('HTML', $payload['parse_mode']);
+        $this->assertStringContainsString('<b>Ringkasan Penjualan</b>', $html);
+        $this->assertStringContainsString('<i>Italic text</i>', $html);
+        $this->assertStringContainsString('1. First numbered item', $html);
+        $this->assertStringContainsString('2. Second numbered item', $html);
+        $this->assertStringContainsString('• First bullet', $html);
+        $this->assertStringContainsString('<code>code</code>', $html);
+        $this->assertStringContainsString('<pre>if ($stock &lt; 2 &amp;&amp; $ready)', $html);
+        $this->assertStringContainsString('<a href="https://example.com/reports?id=1&amp;kind=sales">Open report</a>', $html);
+        $this->assertStringContainsString('Literal &lt;tag&gt; &amp; symbols', $html);
+        $this->assertStringContainsString('&lt;img src=x onerror=alert(1)&gt;', $html);
+        $this->assertStringNotContainsString('<img', $html);
+        $this->assertStringNotContainsString('**', $html);
+        $this->assertStringNotContainsString('javascript:', $html);
+    }
+
+    public function test_telegram_html_formatter_preserves_sanitized_html_and_plain_text_messages(): void
+    {
+        AiSetting::current()->forceFill(['telegram_bot_token' => '91002:bot-secret'])->save();
+        Http::fake(['api.telegram.org/*' => Http::response(['ok' => true, 'result' => []])]);
+        $link = new AiChannelLink(['channel' => 'telegram', 'external_id' => '91002']);
+        $client = app(TelegramClient::class);
+        $client->sendText($link, '<b onclick="alert(1)">Already bold</b> <a href="javascript:alert(1)">unsafe</a>');
+        $client->sendText($link, 'Ordinary text: < 2, > 1 & safe.');
+
+        $payloads = Http::recorded(fn ($request) => str_contains($request->url(), 'sendMessage'))
+            ->map(fn (array $pair) => $pair[0]->data())
+            ->values();
+        $this->assertSame('<b>Already bold</b> unsafe', $payloads[0]['text']);
+        $this->assertSame('HTML', $payloads[0]['parse_mode']);
+        $this->assertSame('Ordinary text: &lt; 2, &gt; 1 &amp; safe.', $payloads[1]['text']);
+        $this->assertSame('HTML', $payloads[1]['parse_mode']);
+    }
+
+    public function test_telegram_long_formatted_messages_are_chunked_without_unbalanced_html(): void
+    {
+        AiSetting::current()->forceFill(['telegram_bot_token' => '91002:bot-secret'])->save();
+        Http::fake(['api.telegram.org/*' => Http::response(['ok' => true, 'result' => []])]);
+        $link = new AiChannelLink(['channel' => 'telegram', 'external_id' => '91002']);
+        $plain = str_repeat('long message & <content> 🌿 ', 400);
+
+        app(TelegramClient::class)->sendText($link, '**Long report**'."\n\n```text\n".$plain."\n```");
+
+        $payloads = Http::recorded(fn ($request) => str_contains($request->url(), 'sendMessage'))
+            ->map(fn (array $pair) => $pair[0]->data())
+            ->values();
+        $this->assertGreaterThan(1, $payloads->count());
+        foreach ($payloads as $payload) {
+            $this->assertSame('HTML', $payload['parse_mode']);
+            $visible = html_entity_decode(strip_tags($payload['text']), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $this->assertLessThanOrEqual(3500, mb_strlen($visible));
+            $this->assertLessThanOrEqual(
+                3500,
+                intdiv(strlen(mb_convert_encoding($visible, 'UTF-16LE', 'UTF-8')), 2),
+            );
+            $this->assertSame(
+                substr_count($payload['text'], '<pre>'),
+                substr_count($payload['text'], '</pre>'),
+            );
+            $this->assertSame(
+                substr_count($payload['text'], '<b>'),
+                substr_count($payload['text'], '</b>'),
+            );
+        }
+        $fallbackChunks = app(TelegramHtmlFormatter::class)->chunks(
+            '**Long report**'."\n\n```text\n".$plain."\n```",
+        );
+        $this->assertSame(
+            'Long report'."\n\n".$plain."\n",
+            implode('', array_column($fallbackChunks, 'plain')),
+        );
+    }
+
+    public function test_telegram_retries_only_the_rejected_html_chunk_as_plain_text(): void
+    {
+        AiSetting::current()->forceFill(['telegram_bot_token' => '91002:bot-secret'])->save();
+        Http::fakeSequence('api.telegram.org/*')
+            ->push(['ok' => false, 'description' => "Bad Request: can't parse entities: Can't find end of the entity"], 400)
+            ->push(['ok' => true, 'result' => ['message_id' => 1]], 200);
+        $link = new AiChannelLink(['channel' => 'telegram', 'external_id' => '91002']);
+
+        app(TelegramClient::class)->sendText($link, '**Safe answer** with <literal> & text');
+
+        $requests = Http::recorded(fn ($request) => str_contains($request->url(), 'sendMessage'));
+        $this->assertCount(2, $requests);
+        $this->assertSame('HTML', $requests[0][0]->data()['parse_mode']);
+        $this->assertStringContainsString('<b>Safe answer</b>', $requests[0][0]->data()['text']);
+        $this->assertArrayNotHasKey('parse_mode', $requests[1][0]->data());
+        $this->assertSame('Safe answer with <literal> & text', $requests[1][0]->data()['text']);
     }
 
     public function test_telegram_webhook_rejects_local_http_url_without_contacting_api(): void
@@ -562,7 +998,7 @@ class AiAgentTest extends TestCase
         $settings = AiSetting::current();
         $settings->forceFill([
             'provider' => 'gemini',
-            'model' => 'gemini-2.0-flash',
+            'model' => 'gemini-2.5-flash-lite',
             'gemini_api_key' => 'gemini-secret',
             'fallback_provider' => null,
             'fallback_model' => null,
@@ -595,7 +1031,7 @@ class AiAgentTest extends TestCase
             'openai_api_key' => 'openai-secret',
             'gemini_api_key' => 'gemini-secret',
             'fallback_provider' => 'gemini',
-            'fallback_model' => 'gemini-2.0-flash',
+            'fallback_model' => 'gemini-2.5-flash-lite',
         ])->save();
         Http::fake([
             'api.openai.com/*' => Http::response([], 503),
@@ -693,16 +1129,16 @@ class AiAgentTest extends TestCase
 
     public function test_ai_message_quota_uses_plan_entitlement(): void
     {
-        $this->seed(\Database\Seeders\PlanSeeder::class);
+        $this->seed(PlanSeeder::class);
         $free = Plan::query()->where('is_free_tier', true)->firstOrFail();
         $entitlements = $free->entitlements;
         $entitlements['max_ai_messages'] = 1;
         $free->forceFill(['entitlements' => $entitlements])->save();
 
-        $usage = app(\App\Services\UsageService::class);
+        $usage = app(UsageService::class);
         $usage->consume($this->tenant, 'ai_messages');
         $this->assertSame(1, $usage->usage($this->tenant, 'ai_messages'));
-        $this->expectException(\App\Exceptions\SubscriptionLimitException::class);
+        $this->expectException(SubscriptionLimitException::class);
         $usage->consume($this->tenant, 'ai_messages');
     }
 

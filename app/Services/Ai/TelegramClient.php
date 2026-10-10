@@ -13,6 +13,8 @@ use Throwable;
 
 class TelegramClient
 {
+    public function __construct(private readonly TelegramHtmlFormatter $formatter) {}
+
     public function sendText(AiChannelLink $link, string $text, ?AiPendingAction $action = null): void
     {
         $keyboard = $action ? [
@@ -22,13 +24,32 @@ class TelegramClient
             ]],
         ] : null;
 
-        $chunks = mb_str_split($text, 3500);
+        $chunks = $this->formatter->chunks($text);
         foreach ($chunks as $index => $chunk) {
-            $payload = ['chat_id' => $link->external_id, 'text' => $chunk];
+            $payload = [
+                'chat_id' => $link->external_id,
+                'text' => $chunk['html'],
+                'parse_mode' => 'HTML',
+            ];
             if ($keyboard && $index === array_key_last($chunks)) {
                 $payload['reply_markup'] = $keyboard;
             }
-            $this->call('sendMessage', $payload);
+            try {
+                $this->call('sendMessage', $payload);
+            } catch (TelegramApiException $error) {
+                if (! $error->parseError) {
+                    throw $error;
+                }
+
+                Log::warning('ai.telegram.html_parse_fallback', [
+                    'reason' => 'telegram_rejected_html',
+                    'http_status' => $error->httpStatus,
+                    'chunk_index' => $index,
+                ]);
+                $payload['text'] = $chunk['plain'];
+                unset($payload['parse_mode']);
+                $this->call('sendMessage', $payload);
+            }
         }
     }
 
@@ -97,8 +118,9 @@ class TelegramClient
         }
 
         if (! $response->successful() || $response->json('ok') !== true) {
+            $rawDescription = (string) $response->json('description', '');
             $description = $this->safeDescription(
-                (string) $response->json('description', ''),
+                $rawDescription,
                 $token,
                 AiSetting::current()->telegram_webhook_secret,
             );
@@ -109,7 +131,10 @@ class TelegramClient
                 'description' => $description,
             ]);
 
-            throw new RuntimeException("Telegram request failed with HTTP {$response->status()}.");
+            throw new TelegramApiException(
+                $response->status(),
+                $method === 'sendMessage' && $this->isParseError($rawDescription),
+            );
         }
 
         return (array) $response->json('result', []);
@@ -168,5 +193,13 @@ class TelegramClient
         $safe = preg_replace('~https?://\S+~i', '[url]', $safe) ?? '';
 
         return mb_substr(trim($safe), 0, 300);
+    }
+
+    private function isParseError(string $description): bool
+    {
+        return preg_match(
+            '/parse entities|can.t find end of|unsupported (?:start|end) tag|entity beginning/i',
+            $description,
+        ) === 1;
     }
 }

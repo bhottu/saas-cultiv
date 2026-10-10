@@ -125,7 +125,11 @@ class AiProviderException extends RuntimeException
     {
         $reason = match ($this->reason) {
             'credential_missing', 'authentication_or_access_denied' => __('The API key is missing or invalid, or API access is denied.'),
-            'model_or_endpoint_not_found' => __('The model or API endpoint was not found.'),
+            'model_or_endpoint_not_found' => $this->provider === 'gemini'
+                ? __('Gemini model :model is unavailable for generateContent. Check that the model ID supports generateContent, for example gemini-2.5-flash-lite.', [
+                    'model' => $this->model,
+                ])
+                : __('The model or API endpoint was not found.'),
             'rate_limited_or_quota_exceeded' => __('The provider quota or rate limit was reached.'),
             'provider_unavailable' => __('The provider is temporarily unavailable.'),
             'transport_failure' => __('Could not connect to the provider API. Check server network access.'),

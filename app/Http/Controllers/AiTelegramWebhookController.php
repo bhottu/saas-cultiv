@@ -16,6 +16,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 
 class AiTelegramWebhookController extends Controller
@@ -110,14 +111,49 @@ class AiTelegramWebhookController extends Controller
             return;
         }
 
+        $requestId = (string) \Illuminate\Support\Str::uuid();
+        request()->attributes->set('ai_request_id', $requestId);
         $context->set($tenant, $user);
         try {
             $reply = $chat->respond($link, $text);
             $telegram->sendText($link, $reply->content, $reply->pendingAction);
         } catch (SubscriptionLimitException) {
             $telegram->sendText($link, __('This workspace has reached its monthly AI message limit.'));
+        } catch (\App\Services\Ai\AiProviderException $error) {
+            Log::warning('ai.telegram.message_processing_failed', [
+                'request_id' => $requestId,
+                'tenant_id' => $tenant->id,
+                'exception' => $error::class,
+                'failure_stage' => 'provider',
+            ]);
+            $telegram->sendText($link, __('The AI service is temporarily unavailable. Please try again later.'));
+        } catch (HttpExceptionInterface $error) {
+            if ($error->getStatusCode() === 403) {
+                Log::warning('ai.telegram.access_denied', [
+                    'request_id' => $requestId,
+                    'tenant_id' => $tenant->id,
+                    'exception' => $error::class,
+                ]);
+                $telegram->sendText($link, __('You do not have permission to access that workspace information.'));
+
+                return;
+            }
+
+            Log::warning('ai.telegram.message_processing_failed', [
+                'request_id' => $requestId,
+                'tenant_id' => $tenant->id,
+                'exception' => $error::class,
+                'failure_stage' => 'tool_or_message_processing',
+                'http_status' => $error->getStatusCode(),
+            ]);
+            $telegram->sendText($link, __('I could not process that request. Please try again later.'));
         } catch (Throwable $error) {
-            Log::warning('ai.telegram.message_processing_failed', ['exception' => $error::class]);
+            Log::warning('ai.telegram.message_processing_failed', [
+                'request_id' => $requestId,
+                'tenant_id' => $tenant->id,
+                'exception' => $error::class,
+                'failure_stage' => 'tool_or_message_processing',
+            ]);
             $telegram->sendText($link, __('I could not process that request. Please try again later.'));
         }
     }

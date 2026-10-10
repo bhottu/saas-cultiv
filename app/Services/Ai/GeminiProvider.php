@@ -46,11 +46,17 @@ class GeminiProvider implements AiProvider
             if (! empty($message['content'])) {
                 $parts[] = ['text' => $message['content']];
             }
-            foreach (($message['tool_calls'] ?? []) as $call) {
-                $parts[] = ['functionCall' => [
-                    'name' => $call['function']['name'],
-                    'args' => json_decode($call['function']['arguments'], true) ?: [],
-                ]];
+            if (isset($message['provider_metadata']['gemini_content_parts'])
+                && is_array($message['provider_metadata']['gemini_content_parts'])) {
+                $parts = $message['provider_metadata']['gemini_content_parts'];
+            } else {
+                foreach (($message['tool_calls'] ?? []) as $call) {
+                    $arguments = json_decode($call['function']['arguments'], true);
+                    $parts[] = ['functionCall' => [
+                        'name' => $call['function']['name'],
+                        'args' => is_array($arguments) ? $arguments : [],
+                    ]];
+                }
             }
             $contents[] = ['role' => $role, 'parts' => $parts];
         }
@@ -120,19 +126,30 @@ class GeminiProvider implements AiProvider
         $text = '';
         $calls = [];
         foreach ($parts as $part) {
+            if (! is_array($part)) {
+                throw new AiProviderException('gemini', $this->model, 'invalid_response');
+            }
             if (isset($part['text'])) {
                 $text .= $part['text'];
             }
             if (isset($part['functionCall'])) {
+                $functionCall = $part['functionCall'];
+                if (! is_array($functionCall)
+                    || ! is_string($functionCall['name'] ?? null)
+                    || ! is_array($functionCall['args'] ?? [])) {
+                    throw new AiProviderException('gemini', $this->model, 'invalid_tool_arguments');
+                }
                 $calls[] = [
                     'id' => 'gemini-'.count($calls),
-                    'name' => (string) $part['functionCall']['name'],
-                    'arguments' => (array) ($part['functionCall']['args'] ?? []),
+                    'name' => $functionCall['name'],
+                    'arguments' => $functionCall['args'] ?? [],
                 ];
             }
         }
 
-        return new AiProviderResponse($text !== '' ? $text : null, $calls);
+        return new AiProviderResponse($text !== '' ? $text : null, $calls, [
+            'gemini_content_parts' => $parts,
+        ]);
     }
 
     private function transportErrorType(ConnectionException $error): string

@@ -31,7 +31,13 @@ class AiProviderManager
 
             Log::warning('ai.provider.primary_failed_using_fallback', [
                 'provider' => $settings->provider,
+                'model' => $settings->model,
                 'fallback_provider' => $settings->fallback_provider,
+                'fallback_model' => $settings->fallback_model,
+                'reason' => $primaryError instanceof AiProviderException ? $primaryError->reason : 'provider_or_transport_error',
+                'provider_status' => $primaryError instanceof AiProviderException ? $primaryError->status : null,
+                'provider_api_status' => $primaryError instanceof AiProviderException ? $primaryError->apiStatus : null,
+                'duration_ms' => $primaryError instanceof AiProviderException ? $primaryError->elapsedMilliseconds : null,
                 'exception' => $primaryError::class,
             ]);
 

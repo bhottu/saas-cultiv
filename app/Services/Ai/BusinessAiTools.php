@@ -13,10 +13,10 @@ use App\Services\BusinessAuthorization;
 use App\Services\CalculateSaleTotals;
 use App\Services\Money;
 use App\Services\TenantContext;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use RuntimeException;
 
 class BusinessAiTools
 {
@@ -41,11 +41,13 @@ class BusinessAiTools
             ],
             [
                 'name' => 'get_stock',
-                'description' => 'Read current stock for one active product in the workspace.',
+                'description' => 'Read current stock for an active workspace product. Provide either product_id or a product name, SKU, or barcode as query. If the user did not identify a product, call this tool without arguments so the assistant can ask which product.',
                 'parameters' => [
                     'type' => 'object',
-                    'properties' => ['product_id' => ['type' => 'integer']],
-                    'required' => ['product_id'],
+                    'properties' => [
+                        'product_id' => ['type' => 'integer', 'description' => 'Product ID returned by search_products'],
+                        'query' => ['type' => 'string', 'description' => 'Product name, SKU, or barcode'],
+                    ],
                 ],
             ],
             [
@@ -98,17 +100,56 @@ class BusinessAiTools
 
     public function execute(string $name, array $arguments, AiChannelLink $link): AiToolResult
     {
+        $startedAt = hrtime(true);
         try {
-            return match ($name) {
+            $tenant = $this->context->tenant();
+            $user = $this->context->user();
+            abort_unless(
+                $tenant
+                    && $user
+                    && (int) $tenant->id === (int) $link->tenant_id
+                    && (int) $user->id === (int) $link->user_id
+                    && $this->context->role() !== null,
+                403,
+                'The linked workspace membership is not active.',
+            );
+
+            $result = match ($name) {
                 'search_products' => $this->searchProducts($arguments),
                 'get_stock' => $this->getStock($arguments),
                 'get_sales_summary' => $this->salesSummary($arguments),
                 'search_customers' => $this->searchCustomers($arguments),
                 'draft_sale' => $this->draftSale($arguments, $link),
-                default => new AiToolResult(__('That action is not available.')),
+                default => null,
             };
+            if ($result === null) {
+                Log::warning('ai.assistant.tool_rejected', [
+                    'request_id' => request()->attributes->get('ai_request_id'),
+                    'tool' => $name,
+                    'reason' => 'unknown_tool',
+                    'tenant_id' => $link->tenant_id,
+                ]);
+
+                return new AiToolResult(json_encode([
+                    'status' => 'unsupported_tool',
+                    'message' => __('That action is not available.'),
+                ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
+            }
+
+            return $result;
         } catch (ValidationException) {
-            return new AiToolResult(__('The request details were invalid. Ask the user to provide valid values.'));
+            Log::warning('ai.assistant.tool_rejected', [
+                'request_id' => request()->attributes->get('ai_request_id'),
+                'tool' => $name,
+                'reason' => 'invalid_arguments',
+                'tenant_id' => $link->tenant_id,
+                'duration_ms' => (int) ((hrtime(true) - $startedAt) / 1_000_000),
+            ]);
+
+            return new AiToolResult(json_encode([
+                'status' => 'invalid_arguments',
+                'message' => __('The request details were invalid. Ask the user to provide valid values.'),
+            ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
         }
     }
 
@@ -131,18 +172,62 @@ class BusinessAiTools
     private function getStock(array $arguments): AiToolResult
     {
         $this->authorization->authorize('inventory.view');
-        $data = Validator::make($arguments, ['product_id' => ['required', 'integer', 'min:1']])->validate();
-        $product = Product::query()->where('is_active', true)->findOrFail($data['product_id']);
+        $data = Validator::make($arguments, [
+            'product_id' => ['nullable', 'integer', 'min:1'],
+            'query' => ['nullable', 'string', 'min:1', 'max:100'],
+        ])->validate();
+        $productQuery = Product::query()->where('is_active', true);
+        if (! empty($data['product_id'])) {
+            $product = $productQuery->find($data['product_id']);
+            if (! $product) {
+                return new AiToolResult(json_encode([
+                    'status' => 'product_not_found',
+                    'message' => __('No active product was found in this workspace.'),
+                ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
+            }
+        } elseif (! empty($data['query'])) {
+            $matches = $productQuery->search($data['query'])
+                ->orderBy('name')->limit(10)->get(['id', 'name', 'sku', 'barcode']);
+
+            if ($matches->isEmpty()) {
+                return new AiToolResult(json_encode([
+                    'status' => 'product_not_found',
+                    'query' => $data['query'],
+                    'message' => __('No active product matched that name, SKU, or barcode.'),
+                ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
+            }
+            if ($matches->count() > 1) {
+                return new AiToolResult(json_encode([
+                    'status' => 'multiple_products_found',
+                    'products' => $matches->map(fn (Product $match) => [
+                        'id' => $match->id,
+                        'name' => $match->name,
+                        'sku' => $match->sku,
+                        'barcode' => $match->barcode,
+                    ])->values(),
+                    'message' => __('Several products matched. Ask the user to choose one.'),
+                ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
+            }
+
+            $product = $matches->first();
+        } else {
+            return new AiToolResult(json_encode([
+                'status' => 'product_required',
+                'message' => __('Which product would you like to check? Please provide its name, SKU, or barcode.'),
+            ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
+        }
+
         $balances = StockBalance::query()->where('product_id', $product->id)->with('warehouse:id,name')
             ->get(['warehouse_id', 'quantity']);
 
-        return new AiToolResult(collect([
+        return new AiToolResult(json_encode([
+            'status' => 'stock_found',
             'product' => $product->name,
             'stock_by_warehouse' => $balances->map(fn (StockBalance $balance) => [
                 'warehouse' => $balance->warehouse?->name,
                 'quantity' => $balance->quantity,
             ])->values(),
-        ])->toJson());
+        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
     }
 
     private function salesSummary(array $arguments): AiToolResult
