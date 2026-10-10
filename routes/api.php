@@ -52,9 +52,18 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'api.tenant', 'plan.feature:api
     // ---------------------------------------------------------------- business data
     //
     // Read-only on purpose. The business API is a data surface for integrations
-    // (POS, mobile, reporting, marketplaces); writes stay behind the web layer so they
-    // keep the full validation, permission and stock-locking rules of the domain
-    // services instead of being re-implemented per endpoint.
+    // Historically read-only: reads (POS, mobile, reporting, marketplaces) ship first.
+    // Writes now exist for the resources Cultiv One really supports, and each one
+    // delegates to the SAME domain service the web layer uses — so API traffic keeps the
+    // full validation, permission and stock-locking rules of the domain instead of
+    // re-implementing them per endpoint:
+    //
+    //   products/categories/brands/customers/suppliers -> master-data store/update
+    //   warehouses -> CRUD, refused while it still holds stock
+    //   stock      -> POST /stock/adjust only (an adjustment, never an overwrite)
+    //   sales      -> POST /sales via RecordSaleService (totals & payment derived)
+    //   purchases  -> create/edit/delete, never bumping stock before receiving
+    //   payments   -> read-only by design (webhook-verified records)
     //
     // Static segments are declared BEFORE the {id} routes so a path like
     // "products/lookup" is never parsed as a product id.
@@ -121,6 +130,15 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'api.tenant', 'plan.feature:api
         ->middleware('api.guard:warehouses,read')->name('api.v1.warehouses.index');
     Route::get('/warehouses/{warehouse}', [\App\Http\Controllers\Api\V1\WarehouseController::class, 'show'])
         ->middleware('api.guard:warehouses,read')->name('api.v1.warehouses.show');
+    Route::post('/warehouses', [\App\Http\Controllers\Api\V1\WarehouseController::class, 'store'])
+        ->middleware('api.guard:warehouses,write')
+        ->name('api.v1.warehouses.store');
+    Route::match(['put', 'patch'], '/warehouses/{warehouse}', [\App\Http\Controllers\Api\V1\WarehouseController::class, 'update'])
+        ->middleware('api.guard:warehouses,write')
+        ->name('api.v1.warehouses.update');
+    Route::delete('/warehouses/{warehouse}', [\App\Http\Controllers\Api\V1\WarehouseController::class, 'destroy'])
+        ->middleware('api.guard:warehouses,delete')
+        ->name('api.v1.warehouses.destroy');
 
     Route::get('/stock/summary', [\App\Http\Controllers\Api\V1\StockController::class, 'summary'])
         ->middleware('api.guard:stock,read')->name('api.v1.stock.summary');
@@ -128,14 +146,30 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'api.tenant', 'plan.feature:api
         ->middleware('api.guard:stock,read')->name('api.v1.stock.index');
     Route::get('/stock/{product}', [\App\Http\Controllers\Api\V1\StockController::class, 'show'])
         ->middleware('api.guard:stock,read')->name('api.v1.stock.show');
+    // Static segment first: "stock/adjust" must never bind as a {product} id.
+    Route::post('/stock/adjust', [\App\Http\Controllers\Api\V1\StockController::class, 'adjust'])
+        ->middleware('api.guard:stock,write')
+        ->name('api.v1.stock.adjust');
 
     Route::get('/sales', [\App\Http\Controllers\Api\V1\SaleController::class, 'index'])
         ->middleware('api.guard:sales,read')->name('api.v1.sales.index');
     Route::get('/sales/{sale}', [\App\Http\Controllers\Api\V1\SaleController::class, 'show'])
         ->middleware('api.guard:sales,read')->name('api.v1.sales.show');
+    Route::post('/sales', [\App\Http\Controllers\Api\V1\SaleController::class, 'store'])
+        ->middleware('api.guard:sales,write')
+        ->name('api.v1.sales.store');
 
     Route::get('/purchases', [\App\Http\Controllers\Api\V1\PurchaseController::class, 'index'])
         ->middleware('api.guard:purchases,read')->name('api.v1.purchases.index');
     Route::get('/purchases/{purchase}', [\App\Http\Controllers\Api\V1\PurchaseController::class, 'show'])
         ->middleware('api.guard:purchases,read')->name('api.v1.purchases.show');
+    Route::post('/purchases', [\App\Http\Controllers\Api\V1\PurchaseController::class, 'store'])
+        ->middleware('api.guard:purchases,write')
+        ->name('api.v1.purchases.store');
+    Route::match(['put', 'patch'], '/purchases/{purchase}', [\App\Http\Controllers\Api\V1\PurchaseController::class, 'update'])
+        ->middleware('api.guard:purchases,write')
+        ->name('api.v1.purchases.update');
+    Route::delete('/purchases/{purchase}', [\App\Http\Controllers\Api\V1\PurchaseController::class, 'destroy'])
+        ->middleware('api.guard:purchases,delete')
+        ->name('api.v1.purchases.destroy');
 });

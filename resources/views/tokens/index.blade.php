@@ -74,8 +74,10 @@
                             @php
                                 $readScope = $row['resource'].':read';
                                 $writeScope = $row['resource'].':write';
+                                $deleteScope = $row['resource'].':delete';
                                 $canRead = in_array($readScope, $availableScopes, true);
                                 $canWrite = in_array($writeScope, $availableScopes, true);
+                                $canDelete = in_array($deleteScope, $availableScopes, true);
                             @endphp
                             <div class="flex items-center justify-between px-4 py-2.5 text-sm">
                                 <span class="text-gray-800">{{ __($row['label']) }}</span>
@@ -92,6 +94,16 @@
                                                class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                                         {{ __('Write') }}
                                     </label>
+                                    {{-- Only offered when a real DELETE endpoint exists; otherwise the
+                                         checkbox is omitted entirely rather than rendered dead. --}}
+                                    @if ($row['delete_supported'] ?? false)
+                                        <label class="inline-flex items-center gap-2 {{ $canDelete ? 'text-gray-700' : 'text-gray-300' }}">
+                                            <input type="checkbox" name="scopes[]" value="{{ $deleteScope }}"
+                                                   @disabled(! $canDelete)
+                                                   class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                            {{ __('Delete') }}
+                                        </label>
+                                    @endif
                                 </span>
                             </div>
                         @endforeach

@@ -263,6 +263,7 @@ return [
     'Write' => 'Write',
     'Not available' => 'Not available',
     'Read allows GET requests for the resource. Write allows POST, PUT and PATCH.' => 'Read allows GET requests for the resource. Write allows POST, PUT and PATCH.',
+    'Delete allows DELETE for resources that support removing data.' => 'Delete allows DELETE for resources that support removing data.',
     'Write requires Read: enabling Write turns Read on automatically.' => 'Write requires Read: enabling Write turns Read on automatically.',
     'These toggles are platform-wide. A workspace can only grant API token scopes you enable here.' => 'These toggles are platform-wide. A workspace can only grant API token scopes you enable here.',
     'Turning this off may break existing integrations. Continue?' => 'Turning this off may break existing integrations. Continue?',

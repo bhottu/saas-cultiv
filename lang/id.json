@@ -285,6 +285,7 @@
     "Delete": "Hapus",
     "Delete Account": "Hapus Akun",
     "Delete Permanently": "Hapus Permanen",
+    "Delete allows DELETE for resources that support removing data.": "Delete mengizinkan request DELETE untuk resource yang mendukung penghapusan data.",
     "Delete product": "Hapus produk",
     "Delete supplier?": "Hapus supplier?",
     "Delete this category?": "Hapus kategori ini?",

@@ -256,6 +256,7 @@ return [
     'Write' => 'Tulis',
     'Not available' => 'Tidak tersedia',
     'Read allows GET requests for the resource. Write allows POST, PUT and PATCH.' => 'Read mengizinkan request GET ke resource. Write mengizinkan POST, PUT, dan PATCH.',
+    'Delete allows DELETE for resources that support removing data.' => 'Delete mengizinkan request DELETE untuk resource yang mendukung penghapusan data.',
     'Write requires Read: enabling Write turns Read on automatically.' => 'Write memerlukan Read: mengaktifkan Write akan otomatis mengaktifkan Read.',
     'These toggles are platform-wide. A workspace can only grant API token scopes you enable here.' => 'Pengaturan ini berlaku untuk seluruh platform. Workspace hanya dapat memberikan scope API token yang Anda aktifkan di sini.',
     'Turning this off may break existing integrations. Continue?' => 'Mematikan ini dapat mengganggu integrasi yang sudah ada. Lanjutkan?',

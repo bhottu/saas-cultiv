@@ -31,6 +31,7 @@ class ApiCapabilityController extends AdminController
             'capabilities' => ['required', 'array'],
             'capabilities.*.read' => ['nullable', 'boolean'],
             'capabilities.*.write' => ['nullable', 'boolean'],
+            'capabilities.*.delete' => ['nullable', 'boolean'],
         ])['capabilities'];
 
         $changes = [];
@@ -40,25 +41,39 @@ class ApiCapabilityController extends AdminController
         foreach ($access->registry() as $resource => $definition) {
             $read = (bool) ($submitted[$resource]['read'] ?? false);
             $write = (bool) ($submitted[$resource]['write'] ?? false);
+            $delete = (bool) ($submitted[$resource]['delete'] ?? false);
 
-            // Write implies Read (§6). Enforced here as well as in the UI, so a
-            // hand-crafted payload cannot persist "Write on + Read off".
-            if ($write) {
+            // A stricter operation implies every weaker one (§6). Enforced here as well
+            // as in the UI, so a hand-crafted payload cannot persist "Read off + Delete
+            // on", and an operation with no endpoint can never be switched on.
+            if ($delete) {
+                $write = true;
+                $read = true;
+            } elseif ($write) {
                 $read = true;
             }
 
+            $write = $write && (bool) ($definition['write'] ?? false);
+            $delete = $delete && (bool) ($definition['delete'] ?? false);
+
             $row = ApiCapability::query()->firstOrNew(['resource' => $resource]);
 
-            $before = ['read' => (bool) $row->read_enabled, 'write' => (bool) $row->write_enabled];
+            $before = [
+                'read' => (bool) $row->read_enabled,
+                'write' => (bool) $row->write_enabled,
+                'delete' => (bool) $row->delete_enabled,
+            ];
 
             $row->fill([
                 'read_enabled' => $read,
-                // A resource without write endpoints can never be write-enabled.
-                'write_enabled' => $write && (bool) ($definition['write'] ?? false),
+                'write_enabled' => $write,
+                'delete_enabled' => $delete,
             ])->save();
 
-            if ($before !== ['read' => $read, 'write' => $row->write_enabled]) {
-                $changes[$resource] = ['from' => $before, 'to' => ['read' => $read, 'write' => (bool) $row->write_enabled]];
+            $after = ['read' => $read, 'write' => (bool) $row->write_enabled, 'delete' => (bool) $row->delete_enabled];
+
+            if ($before !== $after) {
+                $changes[$resource] = ['from' => $before, 'to' => $after];
             }
         }
 

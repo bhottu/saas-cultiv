@@ -92,7 +92,6 @@ class PurchasesController extends Controller
         $tenant = $request->user()->currentTenant;
         $validated = $request->validate($this->rules($request, $tenant));
         $totals = $this->totals($validated);
-
         $purchase = DB::transaction(function () use ($tenant, $validated, $totals) {
             $purchase = Purchase::create([
                 'tenant_id' => $tenant->id, 'supplier_id' => $validated['supplier_id'],
@@ -267,34 +266,20 @@ class PurchasesController extends Controller
         return redirect()->route('purchases.show', $purchase)->with('status', ['type' => 'success', 'message' => __('Purchase cancelled.')]);
     }
 
+    /**
+     * Validation rules — shared with the public API.
+     *
+     * @see \App\Services\PurchaseOrderService
+     */
     private function rules(Request $request, \App\Models\Tenant $tenant): array
     {
-        $owned = fn (string $table) => \Illuminate\Validation\Rule::exists($table, 'id')->where(fn ($query) => $query->where('tenant_id', $tenant->id));
-        return [
-                'supplier_id' => ['required', 'integer', $owned('suppliers')],
-                'warehouse_id' => ['required', 'integer', $owned('warehouses')],
-            'expected_at' => ['nullable', 'date'],
-            'discount' => ['nullable', 'numeric', 'min:0'],
-            'tax' => ['nullable', 'numeric', 'min:0'],
-            'shipping' => ['nullable', 'numeric', 'min:0'],
-            'notes' => ['nullable', 'string', 'max:65535'],
-            'items' => ['required', 'array', 'min:1'],
-            'items.*.product_id' => ['required', 'integer', $owned('products'), 'distinct'],
-            'items.*.quantity' => ['required', 'integer', 'min:1', 'max:1000000'],
-            'items.*.unit_cost' => ['required', 'numeric', 'min:0'],
-        ];
+        return app(\App\Services\PurchaseOrderService::class)->rules($tenant);
     }
 
+    /** Recomputed money totals in cents — shared with the public API. */
     private function totals(array $data): array
     {
-        $subtotal = 0;
-        foreach ($data['items'] as $item) {
-            $subtotal += (int) $item['quantity'] * \App\Services\Money::centsFromDisplay($item['unit_cost']);
-        }
-        $discount = min($subtotal, \App\Services\Money::centsFromDisplay($data['discount'] ?? 0));
-        $tax = \App\Services\Money::centsFromDisplay($data['tax'] ?? 0);
-        $shipping = \App\Services\Money::centsFromDisplay($data['shipping'] ?? 0);
-        return compact('subtotal', 'discount', 'tax', 'shipping') + ['total' => max(0, $subtotal - $discount) + $tax + $shipping];
+        return app(\App\Services\PurchaseOrderService::class)->totals($data);
     }
 
     private function ensureOwned(Purchase $purchase): void

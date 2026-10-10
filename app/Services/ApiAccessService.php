@@ -18,12 +18,18 @@ use App\Models\ApiCapability;
  *                          not offer can never be minted.
  *  - `supports()`      — whether the resource/operation exists at all in this build.
  *
- * Write always requires Read (§6): `allows(resource, 'write')` is false unless both
- * toggles are on, so the illegal "Read off + Write on" state cannot exist even if a
- * row were written out-of-band.
+ * Operations are exactly `read`, `write` and `delete`, matching config/api.php.
+ *
+ * Dependencies between operations (§6): a stricter operation implies the weaker ones,
+ * so `allows(resource, 'delete')` is false unless Read and Write are both on as well.
+ * The illegal "Read off + Delete on" state therefore cannot exist even if a row were
+ * written out-of-band.
  */
 class ApiAccessService
 {
+    /** Every operation this build understands, weakest first. */
+    public const OPERATIONS = ['read', 'write', 'delete'];
+
     /** @var array<string, ApiCapability> Request-local cache. */
     private array $loaded = [];
 
@@ -36,12 +42,20 @@ class ApiAccessService
     /** Whether an operation exists at all for a resource in this build. */
     public function supports(string $resource, string $operation): bool
     {
-        if (! isset($this->registry()[$resource])) {
+        $definition = $this->registry()[$resource] ?? null;
+
+        if (! is_array($definition)) {
             return false;
         }
 
-        return $operation === 'read'
-            || (bool) ($this->registry()[$resource]['write'] ?? false);
+        // Read is inherent to being registered; write/delete must be declared, and an
+        // undeclared operation defaults to false rather than to "allowed".
+        return match ($operation) {
+            'read' => true,
+            'write' => (bool) ($definition['write'] ?? false),
+            'delete' => (bool) ($definition['delete'] ?? false),
+            default => false,
+        };
     }
 
     /**
@@ -64,6 +78,7 @@ class ApiAccessService
                 'resource' => $resource,
                 'read_enabled' => true,
                 'write_enabled' => (bool) ($this->registry()[$resource]['write'] ?? false),
+                'delete_enabled' => (bool) ($this->registry()[$resource]['delete'] ?? false),
             ]);
         }
 
@@ -82,12 +97,29 @@ class ApiAccessService
 
         $capability = $this->capability($resource);
 
-        if ($operation === 'write') {
-            // Write implies Read (§6).
-            return $capability->write_enabled && $capability->read_enabled;
+        // An operation is only ever granted when every weaker operation is on too.
+        foreach (self::OPERATIONS as $candidate) {
+            $required = $this->supports($resource, $candidate);
+
+            if ($candidate === 'read') {
+                $enabled = (bool) $capability->read_enabled;
+            } elseif ($candidate === 'write') {
+                $enabled = (bool) $capability->write_enabled;
+            } else {
+                $enabled = (bool) $capability->delete_enabled;
+            }
+
+            if ($required && ! $enabled) {
+                return false;
+            }
+
+            // Operations weaker than the one being asked about are irrelevant.
+            if ($candidate === $operation) {
+                break;
+            }
         }
 
-        return (bool) $capability->read_enabled;
+        return true;
     }
 
     /**
@@ -104,12 +136,10 @@ class ApiAccessService
         $scopes = [];
 
         foreach (array_keys($this->registry()) as $resource) {
-            if ($this->allows($resource, 'read')) {
-                $scopes[] = $resource.':read';
-            }
-
-            if ($this->allows($resource, 'write')) {
-                $scopes[] = $resource.':write';
+            foreach (self::OPERATIONS as $operation) {
+                if ($this->allows($resource, $operation)) {
+                    $scopes[] = "{$resource}:{$operation}";
+                }
             }
         }
 
@@ -124,12 +154,19 @@ class ApiAccessService
         foreach ($this->registry() as $resource => $definition) {
             $capability = $this->capability($resource);
 
+            $writeSupported = (bool) ($definition['write'] ?? false);
+            $deleteSupported = (bool) ($definition['delete'] ?? false);
+
             $rows[] = [
                 'resource' => $resource,
                 'label' => (string) ($definition['label'] ?? $resource),
-                'write_supported' => (bool) ($definition['write'] ?? false),
+                'write_supported' => $writeSupported,
+                'delete_supported' => $deleteSupported,
                 'read_enabled' => (bool) $capability->read_enabled,
-                'write_enabled' => (bool) $capability->write_enabled,
+                'write_enabled' => (bool) $capability->write_enabled && (bool) $capability->read_enabled,
+                'delete_enabled' => (bool) $capability->delete_enabled
+                    && (bool) $capability->write_enabled
+                    && (bool) $capability->read_enabled,
             ];
         }
 

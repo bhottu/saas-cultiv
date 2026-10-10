@@ -284,6 +284,7 @@
     "Delete": "Delete",
     "Delete Account": "Delete Account",
     "Delete Permanently": "Delete Permanently",
+    "Delete allows DELETE for resources that support removing data.": "Delete allows DELETE for resources that support removing data.",
     "Delete product": "Delete product",
     "Delete supplier?": "Delete supplier?",
     "Delete this category?": "Delete this category?",

@@ -5,7 +5,12 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Resources\StockBalanceResource;
 use App\Models\Product;
 use App\Models\StockBalance;
+use App\Models\Warehouse;
+use App\Services\AuditLogger;
+use App\Services\InventoryService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use InvalidArgumentException;
 
 class StockController extends ApiController
 {
@@ -95,6 +100,97 @@ class StockController extends ApiController
                 'on_hand' => (int) $balances->sum('quantity'),
                 'by_warehouse' => StockBalanceResource::collection($balances),
             ],
+        ]);
+    }
+
+    /**
+     * Record a stock adjustment — the ONLY way stock changes through the API.
+     *
+     * Stock is never an overwriteable number: this delegates to InventoryService::adjust,
+     * the same pipeline the web "Adjust stock" form uses, so a StockMovement row is always
+     * written and the balance can never drift from its history. There is deliberately no
+     * DELETE here — movements are the audit trail of the quantity.
+     */
+    public function adjust(Request $request, InventoryService $inventory)
+    {
+        $this->auth->authorize('stock.adjust');
+
+        $tenant = $this->tenant($request);
+
+        $validated = $request->validate([
+            'product_id' => [
+                'required',
+                Rule::exists('products', 'id')->where(fn ($query) => $query->where('tenant_id', $tenant->id)),
+            ],
+            'warehouse_id' => [
+                'required',
+                Rule::exists('warehouses', 'id')->where(fn ($query) => $query->where('tenant_id', $tenant->id)),
+            ],
+            'direction' => ['required', 'in:in,out'],
+            'quantity' => ['required', 'integer', 'min:1', 'max:100000000'],
+            'reason' => ['required', 'string', 'max:255'],
+            'notes' => ['nullable', 'string', 'max:65535'],
+        ]);
+
+        // Resolved without global scopes then re-checked against the token's workspace:
+        // an id belonging to another tenant must 404, never read or write.
+        $product = Product::withoutGlobalScopes()->findOrFail($validated['product_id']);
+        $warehouse = Warehouse::withoutGlobalScopes()->findOrFail($validated['warehouse_id']);
+
+        abort_unless(
+            $product->tenant_id === $tenant->id && $warehouse->tenant_id === $tenant->id,
+            404
+        );
+
+        if (! $product->track_inventory) {
+            return response()->json([
+                'message' => 'This product does not track inventory.',
+                'code' => 'inventory_not_tracked',
+            ], 422);
+        }
+
+        $reducing = $validated['direction'] === 'out';
+        $signedQuantity = $reducing
+            ? -1 * (int) $validated['quantity']
+            : (int) $validated['quantity'];
+
+        try {
+            $movement = $inventory->adjust(
+                $tenant,
+                $product,
+                $warehouse->id,
+                $signedQuantity,
+                $validated['reason'],
+                $request->user()?->id,
+                $validated['notes'] ?? null,
+            );
+        } catch (InvalidArgumentException $exception) {
+            // Raised BEFORE writing anything, so no movement and no partial balance.
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'code' => 'stock_adjustment_rejected',
+            ], 422);
+        }
+
+        $balance = (int) StockBalance::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('product_id', $product->id)
+            ->where('warehouse_id', $warehouse->id)
+            ->value('quantity');
+
+        AuditLogger::log('stock.adjusted', $movement, [
+            'product_id' => $product->id,
+            'warehouse_id' => $warehouse->id,
+            'quantity' => $signedQuantity,
+            'balance' => $balance,
+            'reason' => $validated['reason'],
+        ]);
+
+        return response()->json([
+            'message' => ($reducing ? 'Stock reduced successfully.' : 'Stock added successfully.')
+                .' New balance: '.$balance.' '.$product->unit.'.',
+            'movement_id' => $movement->id,
+            'balance' => $balance,
         ]);
     }
 }

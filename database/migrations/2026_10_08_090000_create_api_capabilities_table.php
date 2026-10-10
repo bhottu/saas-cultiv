@@ -25,6 +25,7 @@ return new class extends Migration
             $table->string('resource', 64)->unique();
             $table->boolean('read_enabled')->default(false);
             $table->boolean('write_enabled')->default(false);
+            $table->boolean('delete_enabled')->default(false);
             $table->timestamps();
         });
 
@@ -35,6 +36,7 @@ return new class extends Migration
                 'resource' => $key,
                 'read_enabled' => true,
                 'write_enabled' => (bool) ($definition['write'] ?? false),
+                'delete_enabled' => (bool) ($definition['delete'] ?? false),
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);

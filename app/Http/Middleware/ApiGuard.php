@@ -51,9 +51,11 @@ class ApiGuard
         if ($isResource) {
             if (! $this->access->allows($resource, $operation)) {
                 return response()->json([
-                    'message' => $operation === 'write'
-                        ? "Writing {$resource} is disabled for API access."
-                        : "Reading {$resource} is disabled for API access.",
+                    'message' => match ($operation) {
+                        'write' => "Writing {$resource} is disabled for API access.",
+                        'delete' => "Deleting {$resource} is disabled for API access.",
+                        default => "Reading {$resource} is disabled for API access.",
+                    },
                     'code' => 'api_capability_disabled',
                 ], 403);
             }
