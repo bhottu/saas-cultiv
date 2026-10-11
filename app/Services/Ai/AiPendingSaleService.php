@@ -50,7 +50,11 @@ class AiPendingSaleService
                 $action->forceFill(['status' => 'cancelled'])->save();
                 $this->audit->pendingAction($action, 'ai.action.cancelled', 'cancelled');
 
-                return __('The sale was cancelled and was not recorded.');
+                return match ($action->action) {
+                    'record_expense' => __('The expense was cancelled and was not recorded.'),
+                    'record_purchase' => __('The purchase draft was cancelled and was not recorded.'),
+                    default => __('The sale was cancelled and was not recorded.'),
+                };
             }
 
             $tenant = Tenant::query()->find($action->tenant_id);
@@ -59,7 +63,11 @@ class AiPendingSaleService
                 $action->forceFill(['status' => 'failed'])->save();
                 $this->audit->pendingAction($action, 'ai.action.failed', 'membership_revoked');
 
-                return __('Workspace access has changed. The sale was not recorded.');
+                return match ($action->action) {
+                    'record_expense' => __('Workspace access has changed. The expense was not recorded.'),
+                    'record_purchase' => __('Workspace access has changed. The purchase draft was not recorded.'),
+                    default => __('Workspace access has changed. The sale was not recorded.'),
+                };
             }
 
             $this->context->set($tenant, $user);
@@ -69,86 +77,217 @@ class AiPendingSaleService
 
                 return __('AI Assistant Telegram is no longer active for this workspace.');
             }
-            if (! $this->authorization->can('sales.create')) {
-                $action->forceFill(['status' => 'failed'])->save();
-                $this->audit->pendingAction($action, 'ai.action.failed', 'permission_revoked');
 
-                return __('Sales permission has changed. The sale was not recorded.');
-            }
+            return match ($action->action) {
+                'record_expense' => $this->decideExpense($action, $tenant, $user),
+                'record_purchase' => $this->decidePurchase($action, $tenant, $user),
+                default => $this->decideSale($action, $tenant, $user),
+            };
+        });
+    }
 
-            $payload = $action->payload;
-            $warehouse = Warehouse::query()->active()->find($payload['warehouse_id']);
-            $customer = $payload['customer_id']
-                ? Customer::query()->where('is_active', true)->find($payload['customer_id'])
-                : null;
-            if (! $warehouse || ($payload['customer_id'] && ! $customer)) {
-                $action->forceFill(['status' => 'failed'])->save();
-                $this->audit->pendingAction($action, 'ai.action.failed', 'reference_unavailable');
+    /** @return array{0: \\App\\Models\\Expense|bool} */
+    private function decideExpense(AiPendingAction $action, Tenant $tenant, User $user): string
+    {
+        if (! $this->authorization->can('expenses.create')) {
+            $action->forceFill(['status' => 'failed'])->save();
+            $this->audit->pendingAction($action, 'ai.action.failed', 'permission_revoked');
 
-                return __('The selected warehouse or customer is no longer available. The sale was not recorded.');
-            }
+            return __('Expenses permission has changed. The expense was not recorded.');
+        }
 
-            $items = [];
+        $payload = $action->payload;
+        $category = isset($payload['category_id']) ? \App\Models\ExpenseCategory::query()->where('is_active', true)->find($payload['category_id']) : null;
+        if (isset($payload['category_id']) && ! $category) {
+            $action->forceFill(['status' => 'failed'])->save();
+            $this->audit->pendingAction($action, 'ai.action.failed', 'reference_unavailable');
+
+            return __('The selected expense category is no longer available. The expense was not recorded.');
+        }
+
+        try {
+            $expense = \App\Models\Expense::create([
+                'tenant_id' => $tenant->id,
+                'category_id' => $category?->id,
+                'description' => $payload['description'],
+                'amount' => (int) $payload['amount_cents'],
+                'expense_date' => $payload['expense_date'],
+                'payment_method' => $payload['payment_method'] ?? 'cash',
+                'notes' => $payload['notes'] ?? null,
+                'created_by' => $user->id,
+            ]);
+        } catch (ValidationException|SubscriptionLimitException) {
+            $action->forceFill(['status' => 'failed'])->save();
+            $this->audit->pendingAction($action, 'ai.action.failed', 'expense_validation_failed');
+
+            return __('The expense could not be recorded because the details changed. No expense was recorded.');
+        }
+
+        $action->forceFill(['status' => 'completed', 'confirmed_at' => now()])->save();
+        $this->audit->pendingAction($action, 'ai.expense.recorded', 'completed', [
+            'expense_id' => $expense->id,
+            'amount' => $expense->amount,
+            'category_id' => $expense->category_id,
+        ]);
+
+        return __('Expense :description was recorded. Amount: :amount.', [
+            'description' => $expense->description,
+            'amount' => \App\Services\Money::format($expense->amount),
+        ]);
+    }
+
+    private function decidePurchase(AiPendingAction $action, Tenant $tenant, User $user): string
+    {
+        if (! $this->authorization->can('purchases.create')) {
+            $action->forceFill(['status' => 'failed'])->save();
+            $this->audit->pendingAction($action, 'ai.action.failed', 'permission_revoked');
+
+            return __('Purchase permission has changed. The purchase draft was not recorded.');
+        }
+
+        $payload = $action->payload;
+        $supplier = \App\Models\Supplier::query()->active()->find($payload['supplier_id']);
+        $warehouse = Warehouse::query()->active()->find($payload['warehouse_id']);
+        if (! $supplier || ! $warehouse) {
+            $action->forceFill(['status' => 'failed'])->save();
+            $this->audit->pendingAction($action, 'ai.action.failed', 'reference_unavailable');
+
+            return __('The selected supplier or warehouse is no longer available. The purchase draft was not recorded.');
+        }
+
+        try {
+            $purchase = \App\Models\Purchase::create([
+                'tenant_id' => $tenant->id,
+                'supplier_id' => $supplier->id,
+                'warehouse_id' => $warehouse->id,
+                'invoice_number' => app(\App\Services\DocumentNumberingService::class)->next('purchase', $tenant->id),
+                'status' => 'ordered',
+                'ordered_at' => now(),
+                'expected_at' => $payload['expected_at'] ?? null,
+                'notes' => $payload['notes'] ?? null,
+                'shipping' => 0,
+                'discount' => 0,
+                'tax' => 0,
+                'subtotal' => 0,
+                'total' => 0,
+                'created_by' => $user->id,
+            ]);
             foreach ($payload['items'] as $item) {
                 $product = Product::query()->where('is_active', true)->find($item['product_id']);
                 if (! $product) {
-                    $action->forceFill(['status' => 'failed'])->save();
-                    $this->audit->pendingAction($action, 'ai.action.failed', 'product_unavailable');
-
-                    return __('A product is no longer available. The sale was not recorded.');
+                    throw ValidationException::withMessages(['items' => __('One or more products are unavailable.')]);
                 }
-                $items[] = [
+                $unitCost = (int) $item['unit_cost'];
+                $purchase->items()->create([
+                    'tenant_id' => $tenant->id,
                     'product_id' => $product->id,
+                    'product_name' => $product->name,
+                    'sku' => $product->sku,
+                    'unit' => $product->unit,
                     'quantity' => (int) $item['quantity'],
-                    'unit_price' => $item['unit_price'],
-                    'discount_type' => 'fixed',
-                    'discount_value' => 0,
-                ];
+                    'unit_cost' => $unitCost,
+                    'subtotal' => $unitCost * (int) $item['quantity'],
+                ]);
             }
+            $purchase->forceFill([ 'subtotal' => $purchase->items()->sum('subtotal'), 'total' => $purchase->items()->sum('subtotal') ])->save();
+        } catch (ValidationException|SubscriptionLimitException) {
+            $action->forceFill(['status' => 'failed'])->save();
+            $this->audit->pendingAction($action, 'ai.action.failed', 'purchase_validation_failed');
 
-            try {
-                $sale = $this->sales->record($tenant, [
-                    'customer_id' => $customer?->id,
-                    'warehouse_id' => $payload['warehouse_id'],
-                    'sales_channel' => 'manual',
-                    'status' => 'completed',
-                    'sold_at' => now()->toDateTimeString(),
-                    'discount_type' => 'fixed',
-                    'discount_value' => 0,
-                    'tax_percent' => $payload['tax_percent'],
-                    'shipping' => 0,
-                    'payment_method' => $payload['payment_method'],
-                    'payment_amount' => $payload['payment_amount'],
-                    'client_reference' => 'ai-'.$action->id,
-                    'items' => $items,
-                ], $user->id);
-            } catch (ValidationException|SubscriptionLimitException) {
+            return __('The purchase draft could not be recorded because the details changed. No purchase was recorded.');
+        }
+
+        $action->forceFill(['status' => 'completed', 'confirmed_at' => now()])->save();
+        $this->audit->pendingAction($action, 'ai.purchase.recorded', 'completed', [
+            'purchase_id' => $purchase->id,
+            'invoice_number' => $purchase->invoice_number,
+            'total' => $purchase->total,
+        ]);
+
+        return __('Purchase :invoice was recorded. Total: :total.', [
+            'invoice' => $purchase->invoice_number,
+            'total' => \App\Services\Money::format($purchase->total),
+        ]);
+    }
+
+    private function decideSale(AiPendingAction $action, Tenant $tenant, User $user): string
+    {
+        if (! $this->authorization->can('sales.create')) {
+            $action->forceFill(['status' => 'failed'])->save();
+            $this->audit->pendingAction($action, 'ai.action.failed', 'permission_revoked');
+
+            return __('Sales permission has changed. The sale was not recorded.');
+        }
+
+        $payload = $action->payload;
+        $warehouse = Warehouse::query()->active()->find($payload['warehouse_id']);
+        $customer = $payload['customer_id']
+            ? Customer::query()->where('is_active', true)->find($payload['customer_id'])
+            : null;
+        if (! $warehouse || ($payload['customer_id'] && ! $customer)) {
+            $action->forceFill(['status' => 'failed'])->save();
+            $this->audit->pendingAction($action, 'ai.action.failed', 'reference_unavailable');
+
+            return __('The selected warehouse or customer is no longer available. The sale was not recorded.');
+        }
+
+        $items = [];
+        foreach ($payload['items'] as $item) {
+            $product = Product::query()->where('is_active', true)->find($item['product_id']);
+            if (! $product) {
                 $action->forceFill(['status' => 'failed'])->save();
-                $this->audit->pendingAction($action, 'ai.action.failed', 'sale_validation_failed');
+                $this->audit->pendingAction($action, 'ai.action.failed', 'product_unavailable');
 
-                return __('The sale could not be recorded because stock or plan limits changed. No sale was recorded.');
+                return __('A product is no longer available. The sale was not recorded.');
             }
+            $items[] = [
+                'product_id' => $product->id,
+                'quantity' => (int) $item['quantity'],
+                'unit_price' => $item['unit_price'],
+                'discount_type' => 'fixed',
+                'discount_value' => 0,
+            ];
+        }
 
-            $action->forceFill([
+        try {
+            $sale = $this->sales->record($tenant, [
+                'customer_id' => $customer?->id,
+                'warehouse_id' => $payload['warehouse_id'],
+                'sales_channel' => 'manual',
                 'status' => 'completed',
-                'confirmed_at' => now(),
-            ])->save();
-            $this->audit->pendingAction($action, 'ai.sale.recorded', 'completed', [
-                'sale_id' => $sale->id,
-                'invoice_number' => $sale->invoice_number,
-                'total' => $sale->total,
-            ]);
+                'sold_at' => now()->toDateTimeString(),
+                'discount_type' => 'fixed',
+                'discount_value' => 0,
+                'tax_percent' => $payload['tax_percent'],
+                'shipping' => 0,
+                'payment_method' => $payload['payment_method'],
+                'payment_amount' => $payload['payment_amount'],
+                'client_reference' => 'ai-'.$action->id,
+                'items' => $items,
+            ], $user->id);
+        } catch (ValidationException|SubscriptionLimitException) {
+            $action->forceFill(['status' => 'failed'])->save();
+            $this->audit->pendingAction($action, 'ai.action.failed', 'sale_validation_failed');
 
-            return __('Sale :invoice was recorded. Total: :total. Payment status: :payment.', [
-                'invoice' => $sale->invoice_number,
-                'total' => \App\Services\Money::format($sale->total),
-                'payment' => match ($sale->payment_status) {
-                    Sale::PAYMENT_PAID => __('Paid'),
-                    Sale::PAYMENT_PARTIAL => __('Partially Paid'),
-                    Sale::PAYMENT_REFUNDED => __('Refunded'),
-                    default => __('Unpaid'),
-                },
-            ]);
-        });
+            return __('The sale could not be recorded because stock or plan limits changed. No sale was recorded.');
+        }
+
+        $action->forceFill(['status' => 'completed', 'confirmed_at' => now()])->save();
+        $this->audit->pendingAction($action, 'ai.sale.recorded', 'completed', [
+            'sale_id' => $sale->id,
+            'invoice_number' => $sale->invoice_number,
+            'total' => $sale->total,
+        ]);
+
+        return __('Sale :invoice was recorded. Total: :total. Payment status: :payment.', [
+            'invoice' => $sale->invoice_number,
+            'total' => \App\Services\Money::format($sale->total),
+            'payment' => match ($sale->payment_status) {
+                Sale::PAYMENT_PAID => __('Paid'),
+                Sale::PAYMENT_PARTIAL => __('Partially Paid'),
+                Sale::PAYMENT_REFUNDED => __('Refunded'),
+                default => __('Unpaid'),
+            },
+        ]);
     }
 }

@@ -19,8 +19,8 @@ class TelegramClient
     {
         $keyboard = $action ? [
             'inline_keyboard' => [[
-                ['text' => __('Confirm sale'), 'callback_data' => 'confirm_sale:'.$action->id],
-                ['text' => __('Cancel'), 'callback_data' => 'cancel_sale:'.$action->id],
+                ['text' => $this->confirmButtonText($action), 'callback_data' => $this->callbackData($action, true)],
+                ['text' => __('Cancel'), 'callback_data' => $this->callbackData($action, false)],
             ]],
         ] : null;
 
@@ -59,6 +59,28 @@ class TelegramClient
             'callback_query_id' => $callbackId,
             'text' => mb_substr($text, 0, 180),
         ]);
+    }
+
+    public function callbackData(AiPendingAction $action, bool $confirm): string
+    {
+        $actionKey = match ($action->action) {
+            'record_expense' => 'expense',
+            'record_purchase' => 'purchase',
+            'record_sale' => 'sale',
+            default => 'action',
+        };
+
+        return ($confirm ? 'confirm' : 'cancel').'_'.$actionKey.':'.$action->id;
+    }
+
+    public function confirmButtonText(AiPendingAction $action): string
+    {
+        return match ($action->action) {
+            'record_expense' => __('Confirm expense'),
+            'record_purchase' => __('Confirm purchase'),
+            'record_sale' => __('Confirm sale'),
+            default => __('Confirm'),
+        };
     }
 
     public function registerWebhook(): void

@@ -168,10 +168,11 @@ class AiTelegramWebhookController extends Controller
         $data = (string) ($callback['data'] ?? '');
         $chat = $callback['message']['chat'] ?? [];
         $callbackId = (string) ($callback['id'] ?? '');
+
         if (($chat['type'] ?? null) !== 'private'
             || ! isset($from['id'])
             || (string) ($chat['id'] ?? '') !== (string) $from['id']
-            || ! preg_match('/^(confirm|cancel)_sale:([0-9a-f-]{36})$/i', $data, $matches)) {
+            || ! preg_match('/^(confirm|cancel)_(sale|expense|purchase|action):([0-9a-f-]{36})$/i', $data, $matches)) {
             $this->respondToCallback(
                 $telegram,
                 $callbackId,
@@ -214,20 +215,27 @@ class AiTelegramWebhookController extends Controller
         $context->set($tenant, $user);
         $confirmed = strtolower($matches[1]) === 'confirm';
         $failed = false;
+        $callbackType = strtolower($matches[2]);
+        $actionId = $matches[3];
         try {
-            $result = $sales->decide($matches[2], $link, $confirmed);
+            $result = $sales->decide($actionId, $link, $confirmed);
         } catch (Throwable $error) {
-            Log::warning('ai.telegram.confirmation_failed', ['exception' => $error::class]);
+            Log::warning('ai.telegram.confirmation_failed', ['exception' => $error::class, 'callback_type' => $callbackType]);
             $result = __('I could not process that request. Please try again later.');
             $failed = true;
         }
+
+        $statusText = match ($callbackType) {
+            'expense' => $failed ? __('I could not process that request. Please try again later.') : ($confirmed ? __('Expense confirmation processed.') : __('Expense cancelled.')),
+            'purchase' => $failed ? __('I could not process that request. Please try again later.') : ($confirmed ? __('Purchase confirmation processed.') : __('Purchase cancelled.')),
+            default => $failed ? __('I could not process that request. Please try again later.') : ($confirmed ? __('Sale confirmation processed.') : __('Sale cancelled.')),
+        };
+
         $this->respondToCallback(
             $telegram,
             $callbackId,
             $link,
-            $failed
-                ? __('I could not process that request. Please try again later.')
-                : ($confirmed ? __('Sale confirmation processed.') : __('Sale cancelled.')),
+            $statusText,
             $result,
         );
     }
