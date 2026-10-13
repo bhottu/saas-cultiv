@@ -135,6 +135,10 @@
                 @include('welcome.partials.workspace-map')
             </section>
 
+            {{-- ---------------------------------------------- AI Assistant via Telegram --}}
+            {{-- Sits directly under the hero as the page's second section. --}}
+            @include('welcome.partials.telegram-ai')
+
 {{-- ------------------------------------------------ One workspace (value prop) --}}
             <section class="border-y border-gray-100 bg-gray-50/50 py-20 sm:py-24">
                 <div class="mx-auto max-w-6xl px-4">

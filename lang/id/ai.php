@@ -113,6 +113,7 @@ return [
     'category_recorded' => "Kategori produk dibuat.\n\nID: :id\nNama: :name\nDeskripsi: :description\nStatus: :status",
     'brand_draft' => "**Merek Produk Baru**\n\nNama: :name\nDeskripsi: :description\n\nKonfirmasikan untuk membuat merek ini.",
     'brand_recorded' => "Merek produk dibuat.\n\nID: :id\nNama: :name\nDeskripsi: :description\nStatus: :status",
+    'customer_draft' => "**Pelanggan Baru**\n\nNama: :name\nTelepon: :phone\nEmail: :email\nAlamat: :address\n\nKonfirmasikan untuk membuat pelanggan ini.",
     'stock_draft' => "**Penambahan Stok**\n\nProduk: :product\nJumlah: +:quantity :unit\nGudang: :warehouse\nAlasan: :reason\nCatatan: :notes\n\nKonfirmasikan untuk menambah stok ini.",
     'stock_recorded' => "Stok ditambahkan.\n\nProduk: :product\nDitambahkan: +:quantity :unit\nGudang: :warehouse\nAlasan: :reason\nSaldo terbaru: :balance :unit",
     // Plain sentence keys (flattened into lang/<locale>.json by `php artisan lang:sync`).

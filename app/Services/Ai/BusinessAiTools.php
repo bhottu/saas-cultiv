@@ -12,6 +12,7 @@ use App\Models\ExpenseCategory;
 use App\Models\Plan;
 use App\Models\Product;
 use App\Models\Purchase;
+use App\Models\PurchaseItem;
 use App\Models\Sale;
 use App\Models\StockBalance;
 use App\Models\Supplier;
@@ -71,16 +72,19 @@ class BusinessAiTools
             ],
             [
                 'name' => 'get_sales_summary',
-                'description' => 'Read sales totals and order count for a recent period (1 to 90 days).',
+                'description' => 'Read sales totals and order count for a recent period. Pass days (1 to 90) for a rolling window, or from/to dates (YYYY-MM-DD, inclusive) for an explicit range such as "this month". Dates are workspace dates (server timezone).',
                 'parameters' => [
                     'type' => 'object',
-                    'properties' => ['days' => ['type' => 'integer', 'description' => 'Number of days, 1 to 90']],
-                    'required' => ['days'],
+                    'properties' => [
+                        'days' => ['type' => 'integer', 'description' => 'Number of days, 1 to 90; required when from/to are not given'],
+                        'from' => ['type' => 'string', 'description' => 'Earliest sales date (YYYY-MM-DD); use together with to for an explicit range'],
+                        'to' => ['type' => 'string', 'description' => 'Latest sales date (YYYY-MM-DD); defaults to today when only from is given'],
+                    ],
                 ],
             ],
             [
                 'name' => 'search_customers',
-                'description' => 'Search active workspace customers by name, phone number or email. Returns every detail field shown on the website customers page (name, phone, email, address, credit limit, notes); empty values are reported as "-". Use it to find a customer or to show customer details. Never create a customer as a side effect of searching.',
+                'description' => 'Search active workspace customers by name, phone number or email. Returns every detail field shown on the website customers page (name, phone, email, address, credit limit, notes); empty values are reported as "-". Use it to find a customer or to show customer details. Never create a customer as a side effect of searching; when nothing matches and the user wants a new customer, call create_customer instead.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => ['query' => ['type' => 'string', 'description' => 'Customer name, phone number or email']],
@@ -88,8 +92,24 @@ class BusinessAiTools
                 ],
             ],
             [
+                'name' => 'create_customer',
+                'description' => 'Prepare a customer draft with the exact same rules as the website Customers page. Requires a name; phone, email and address are optional. Rejects a duplicate name+phone pair in this workspace. Nothing is saved until the user presses the confirmation button in Telegram. Use only when the user explicitly asks to create/register a customer or confirms creating one; never invent details.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'name' => ['type' => 'string', 'description' => 'Customer name exactly as the user said it'],
+                        'phone' => ['type' => 'string', 'description' => 'Phone number (optional)'],
+                        'email' => ['type' => 'string', 'description' => 'Email address (optional)'],
+                        'address' => ['type' => 'string', 'description' => 'Address (optional)'],
+                        'notes' => ['type' => 'string', 'description' => 'Notes (optional)'],
+                        'credit_limit' => ['type' => 'number', 'description' => 'Credit limit in workspace currency (optional); omit when not requested'],
+                    ],
+                    'required' => ['name'],
+                ],
+            ],
+            [
                 'name' => 'draft_sale',
-                'description' => 'Prepare a sale draft only when required details are available. You may pass items with product IDs, or product_query and quantity for lookup. If details are incomplete, call this tool with what is known so it can return what is needed next. Resolve supplied customer_query using search_customers; never create or invent a customer. A customer is optional and may be omitted for walk-in. Prices and totals always come from the workspace database. A payment method does not imply that money was received; only pass payment_amount when the user explicitly gives an amount received. A pending draft requires Telegram confirmation before recording the sale.',
+                'description' => 'Prepare a sale draft only when required details are available. You may pass items with product IDs, or product_query and quantity for lookup. If details are incomplete, call this tool with what is known so it can return what is needed next. Resolve supplied customer_query using search_customers; when the user wants a customer that does not exist yet, call create_customer first and only use the new customer after its confirmation. Never invent a customer. A customer is optional and may be omitted for walk-in. Each line accepts an optional unit_price (display currency per unit) when the user explicitly states a transaction price such as "harga 125000 per pcs" or "2 pcs x 100000"; otherwise the product master selling price is used. A custom transaction price never changes the product master price; backend recalculates every subtotal and total. A payment method does not imply that money was received; only pass payment_amount when the user explicitly gives an amount received. A pending draft requires Telegram confirmation before recording the sale.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
@@ -100,12 +120,14 @@ class BusinessAiTools
                                 'properties' => [
                                     'product_id' => ['type' => 'integer'],
                                     'quantity' => ['type' => 'integer'],
+                                    'unit_price' => ['type' => 'number', 'description' => 'Optional explicit transaction price per unit in workspace currency. Omit to use the product master selling price.'],
                                 ],
                                 'required' => ['product_id', 'quantity'],
                             ],
                         ],
                         'product_query' => ['type' => 'string', 'description' => 'Product name, SKU, or barcode to resolve in the active workspace'],
                         'quantity' => ['type' => 'integer', 'description' => 'Requested number of units for product_query'],
+                        'unit_price' => ['type' => 'number', 'description' => 'Optional explicit transaction price per unit in workspace currency for product_query. Omit to use the product master selling price.'],
                         'customer_id' => ['type' => 'integer'],
                         'customer_query' => ['type' => 'string', 'description' => 'Existing customer name or phone to resolve in the active workspace'],
                         'customer_phone' => ['type' => 'string', 'description' => 'Phone supplied by user; verify against an existing customer only'],
@@ -341,6 +363,7 @@ class BusinessAiTools
                 'get_stock' => $this->getStock($arguments),
                 'get_sales_summary' => $this->salesSummary($arguments),
                 'search_customers' => $this->searchCustomers($arguments),
+                'create_customer' => $this->createCustomer($arguments, $link),
                 'draft_sale' => $this->draftSale($arguments, $link),
                 'list_expenses' => $this->listExpenses($arguments),
                 'get_expense' => $this->getExpense($arguments),
@@ -485,15 +508,42 @@ class BusinessAiTools
     private function salesSummary(array $arguments): AiToolResult
     {
         $this->authorization->authorize('sales.view');
-        $data = Validator::make($arguments, ['days' => ['required', 'integer', 'min:1', 'max:90']])->validate();
-        $from = now()->subDays($data['days'] - 1)->startOfDay();
-        $sales = Sale::query()->revenue()->where('sold_at', '>=', $from);
+        $data = Validator::make($arguments, [
+            'days' => ['nullable', 'integer', 'min:1', 'max:90', 'required_without:from'],
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date'],
+        ])->validate();
 
-        return new AiToolResult(collect([
-            'period_days' => $data['days'],
+        if (! empty($data['from'])) {
+            $from = Carbon::parse($data['from'])->startOfDay();
+            $to = ! empty($data['to'])
+                ? Carbon::parse($data['to'])->endOfDay()
+                : Carbon::now()->endOfDay();
+            if ($to->lt($from)) {
+                throw ValidationException::withMessages(['to' => __('The end date must not be before the start date.')]);
+            }
+            if ($from->diffInDays($to) > 90) {
+                throw ValidationException::withMessages(['from' => __('The date range may not be longer than 90 days.')]);
+            }
+        } else {
+            $from = Carbon::now()->subDays($data['days'] - 1)->startOfDay();
+            $to = null;
+        }
+
+        $sales = Sale::query()->revenue()->where('sold_at', '>=', $from);
+        if ($to !== null) {
+            $sales->where('sold_at', '<=', $to);
+        }
+
+        $payload = [
+            'period_days' => $from->diffInDays($to ?? Carbon::now()->endOfDay()) + 1,
+            'from' => $from->toDateString(),
+            'to' => ($to ?? Carbon::now())->toDateString(),
             'orders' => (clone $sales)->count(),
             'revenue' => Money::format((int) (clone $sales)->sum('total')),
-        ])->toJson());
+        ];
+
+        return new AiToolResult(collect($payload)->toJson());
     }
 
     private function searchCustomers(array $arguments): AiToolResult
@@ -532,15 +582,94 @@ class BusinessAiTools
         ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
     }
 
+    private function createCustomer(array $arguments, AiChannelLink $link): AiToolResult
+    {
+        $this->authorization->authorize('customers.create');
+        $data = Validator::make($arguments, [
+            'name' => ['required', 'string', 'min:1', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:50'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'notes' => ['nullable', 'string', 'max:65535'],
+            'credit_limit' => ['nullable', 'numeric', 'min:0', 'max:100000000'],
+        ])->validate();
+
+        foreach (['name', 'phone', 'email', 'address', 'notes'] as $field) {
+            if (isset($data[$field])) {
+                $data[$field] = trim($data[$field]);
+                if ($data[$field] === '') {
+                    $data[$field] = null;
+                }
+            }
+        }
+
+        // Same duplicate rule as CustomersController::store: a name+phone pair that
+        // already exists in this workspace is rejected so chat cannot create a twin.
+        if (! empty($data['phone'])) {
+            $duplicate = Customer::query()
+                ->where('name', $data['name'])
+                ->where('phone', $data['phone'])
+                ->first(['id', 'name', 'phone']);
+            if ($duplicate) {
+                return $this->followUp('customer_exists', __('A customer with this name and phone already exists (ID :id).', [
+                    'id' => $duplicate->id,
+                ]));
+            }
+        }
+
+        $action = AiPendingAction::create([
+            'id' => (string) Str::uuid(),
+            'tenant_id' => $this->context->tenant()->id,
+            'user_id' => $link->user_id,
+            'channel_link_id' => $link->id,
+            'action' => 'record_customer',
+            'payload' => [
+                'name' => $data['name'],
+                'phone' => $data['phone'] ?? null,
+                'email' => $data['email'] ?? null,
+                'address' => $data['address'] ?? null,
+                'notes' => $data['notes'] ?? null,
+                'credit_limit_cents' => isset($data['credit_limit'])
+                    ? Money::centsFromDisplay($data['credit_limit'])
+                    : null,
+            ],
+            'status' => 'pending',
+            'expires_at' => now()->addMinutes(10),
+        ]);
+
+        return new AiToolResult(__('ai.customer_draft', [
+            'name' => $data['name'],
+            'phone' => $this->safeText($data['phone'] ?? null),
+            'email' => $this->safeText($data['email'] ?? null),
+            'address' => $this->safeText($data['address'] ?? null, 300),
+        ]), $action);
+    }
+
     private function draftSale(array $arguments, AiChannelLink $link): AiToolResult
     {
         $this->authorization->authorize('sales.create');
+        // Normalize Indonesian chat amounts ("125rb", "Rp125.000") on every money field
+        // so the numeric validators see plain numbers instead of failing on the string.
+        foreach (['unit_price', 'payment_amount'] as $field) {
+            if (array_key_exists($field, $arguments)) {
+                $arguments[$field] = $this->parseDisplayAmount($arguments[$field]) ?? $arguments[$field];
+            }
+        }
+        if (isset($arguments['items']) && is_array($arguments['items'])) {
+            foreach ($arguments['items'] as $index => $item) {
+                if (is_array($item) && array_key_exists('unit_price', $item)) {
+                    $arguments['items'][$index]['unit_price'] = $this->parseDisplayAmount($item['unit_price']) ?? $item['unit_price'];
+                }
+            }
+        }
         $data = Validator::make($arguments, [
             'items' => ['nullable', 'array', 'min:1', 'max:20'],
             'items.*.product_id' => ['required', 'integer', 'min:1'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:1000000'],
+            'items.*.unit_price' => ['nullable', 'numeric', 'min:0', 'max:1000000000000'],
             'product_query' => ['nullable', 'string', 'min:1', 'max:100'],
             'quantity' => ['nullable', 'integer', 'min:1', 'max:1000000'],
+            'unit_price' => ['nullable', 'numeric', 'min:0', 'max:1000000000000'],
             'customer_id' => ['nullable', 'integer', 'min:1'],
             'customer_query' => ['nullable', 'string', 'min:1', 'max:100'],
             'customer_phone' => ['nullable', 'string', 'max:40'],
@@ -592,6 +721,7 @@ class BusinessAiTools
             $data['items'] = [[
                 'product_id' => $matches->first()->id,
                 'quantity' => $data['quantity'],
+                'unit_price' => $data['unit_price'] ?? null,
             ]];
         }
 
@@ -602,7 +732,7 @@ class BusinessAiTools
                     ->orWhereRaw('LOWER(phone) LIKE ?', [$needle]))
                 ->orderBy('name')->limit(10)->get(['id', 'name', 'phone']);
             if ($customers->isEmpty()) {
-                return $this->followUp('customer_not_found', __('I could not find an existing customer named or matching :query. You can choose walk-in, or create the customer in the Customers page first.', [
+                return $this->followUp('customer_not_found', __('I could not find an existing customer named or matching :query. Ask the user to confirm creating this customer with create_customer, or to choose walk-in.', [
                     'query' => $data['customer_query'],
                 ]));
             }
@@ -631,7 +761,7 @@ class BusinessAiTools
                 ->whereRaw('LOWER(phone) LIKE ?', [$phoneNeedle])
                 ->orderBy('name')->limit(10)->get(['id', 'name', 'phone']);
             if ($customers->isEmpty()) {
-                return $this->followUp('customer_not_found', __('I could not find an existing customer with that phone number. You can choose walk-in, or create the customer in the Customers page first.'));
+                return $this->followUp('customer_not_found', __('I could not find an existing customer with that phone number. Ask the user to confirm creating this customer with create_customer, or to choose walk-in.'));
             }
             if ($customers->count() > 1) {
                 return $this->followUp('multiple_customers_found', __('More than one customer matched that phone number. Which one should I use?'), [
@@ -693,16 +823,23 @@ class BusinessAiTools
         foreach ($data['items'] as $item) {
             $product = $products->get((int) $item['product_id']);
             $quantity = (int) $item['quantity'];
+            // A custom transaction price may be supplied explicitly (display
+            // currency per unit). Backend recomputes every subtotal from this
+            // value; the product master selling price is never overwritten.
+            $rowUnitPrice = isset($item['unit_price']) && $item['unit_price'] !== null && $item['unit_price'] !== ''
+                ? Money::centsFromDisplay($item['unit_price'])
+                : (int) $product->selling_price;
             $lines[] = [
                 'quantity' => $quantity,
-                'unit_price' => (int) $product->selling_price,
+                'unit_price' => $rowUnitPrice,
                 'discount_type' => CalculateSaleTotals::TYPE_FIXED,
                 'discount_value' => 0,
             ];
             $items[] = [
                 'product_id' => $product->id,
                 'quantity' => $quantity,
-                'unit_price' => number_format($product->selling_price / 100, 2, '.', ''),
+                'unit_price' => number_format($rowUnitPrice / 100, 2, '.', ''),
+                'is_custom_price' => $rowUnitPrice !== (int) $product->selling_price,
             ];
         }
 
@@ -730,11 +867,22 @@ class BusinessAiTools
             'expires_at' => now()->addMinutes(10),
         ]);
 
-        $itemSummary = collect($items)->map(fn (array $item) => sprintf(
-            '%s × %d',
-            $products->get($item['product_id'])->name,
-            $item['quantity'],
-        ))->implode(', ');
+        $itemSummary = collect($items)->map(function (array $item, int $index) use ($products, $totals) {
+            $product = $products->get($item['product_id']);
+            $lineSubtotal = (int) ($totals['lines'][$index]['subtotal'] ?? 0);
+            $rowLabel = sprintf(
+                '%s × %d @ %s = %s',
+                $product->name,
+                $item['quantity'],
+                Money::format(Money::centsFromDisplay($item['unit_price'])),
+                Money::format($lineSubtotal)
+            );
+            if (! empty($item['is_custom_price'])) {
+                $rowLabel .= sprintf(' (%s %s)', __('normal'), Money::format((int) $product->selling_price));
+            }
+
+            return $rowLabel;
+        })->implode(', ');
         $customerLabel = $customer ? __('for customer :name', ['name' => $customer->name]) : '';
 
         return new AiToolResult(
@@ -904,6 +1052,11 @@ class BusinessAiTools
     private function createExpense(array $arguments, AiChannelLink $link): AiToolResult
     {
         $this->authorization->authorize('expenses.create');
+        // Accept Indonesian chat formats ("55rb", "Rp55.000", "1.500.000") before the
+        // numeric validator runs; unparseable strings stay untouched and fail honestly.
+        if (array_key_exists('amount', $arguments)) {
+            $arguments['amount'] = $this->parseDisplayAmount($arguments['amount']) ?? $arguments['amount'];
+        }
         $data = Validator::make($arguments, [
             'amount' => ['required', 'numeric', 'min:0.01', 'max:1000000000000'],
             'description' => ['nullable', 'string', 'max:255'],
@@ -1411,6 +1564,362 @@ class BusinessAiTools
         ]))];
     }
 
+    /** --------------------------------- warehouses / catalog / team --------------------------------- */
+
+    private function listWarehouses(array $arguments): AiToolResult
+    {
+        $this->authorization->authorize('warehouses.view');
+        $data = Validator::make($arguments, [
+            'status' => ['nullable', 'string', 'in:active,inactive,all'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
+            'page' => ['nullable', 'integer', 'min:1', 'max:10000'],
+        ])->validate();
+
+        [$limit, $offset, $page] = $this->pageWindow($data, 50);
+        $query = Warehouse::query();
+        $status = $data['status'] ?? 'all';
+        if ($status === 'active') {
+            $query->where('is_active', true);
+        } elseif ($status === 'inactive') {
+            $query->where('is_active', false);
+        }
+
+        $totalMatching = (clone $query)->count();
+        if ($totalMatching === 0) {
+            return $this->jsonResult([
+                'status' => 'warehouses_not_found',
+                'total_matching' => 0,
+                'message' => __('There are no warehouses in this workspace yet.'),
+            ]);
+        }
+
+        $warehouses = (clone $query)->orderBy('name')->skip($offset)->take($limit)->get();
+
+        return $this->jsonResult([
+            'status' => 'warehouses_found',
+            'page' => $page,
+            'per_page' => $limit,
+            'total_matching' => $totalMatching,
+            'more' => $offset + $warehouses->count() < $totalMatching,
+            'warehouses' => $warehouses->map(fn (Warehouse $warehouse) => [
+                'id' => $warehouse->id,
+                'name' => $warehouse->name,
+                'code' => $this->safeText($warehouse->code),
+                'status' => $this->activeLabel((bool) $warehouse->is_active),
+            ])->values()->all(),
+        ]);
+    }
+
+    private function listCategories(array $arguments): AiToolResult
+    {
+        $this->authorization->authorize('categories.view');
+        $data = Validator::make($arguments, [
+            'search' => ['nullable', 'string', 'max:100'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
+            'page' => ['nullable', 'integer', 'min:1', 'max:10000'],
+        ])->validate();
+
+        [$limit, $offset, $page] = $this->pageWindow($data);
+        $query = Category::query()->withCount('products');
+        $term = trim((string) ($data['search'] ?? ''));
+        if ($term !== '') {
+            $query->whereRaw('LOWER(name) LIKE ?', ['%'.mb_strtolower($term).'%']);
+        }
+
+        $totalMatching = (clone $query)->count();
+        if ($totalMatching === 0) {
+            return $this->jsonResult([
+                'status' => 'categories_not_found',
+                'total_matching' => 0,
+                'message' => __('There are no product categories in this workspace yet.'),
+            ]);
+        }
+
+        $categories = (clone $query)->orderBy('name')->skip($offset)->take($limit)->get();
+
+        return $this->jsonResult([
+            'status' => 'categories_found',
+            'page' => $page,
+            'per_page' => $limit,
+            'total_matching' => $totalMatching,
+            'more' => $offset + $categories->count() < $totalMatching,
+            'categories' => $categories->map(fn (Category $category) => [
+                'id' => $category->id,
+                'name' => $category->name,
+                'description' => $this->safeText($category->description, 300),
+                'status' => $this->activeLabel((bool) $category->is_active),
+                'products_count' => (int) $category->products_count,
+            ])->values()->all(),
+        ]);
+    }
+
+    private function getCategory(array $arguments): AiToolResult
+    {
+        $this->authorization->authorize('categories.view');
+        $data = Validator::make($arguments, [
+            'category_id' => ['nullable', 'integer', 'min:1'],
+            'name' => ['nullable', 'string', 'max:255'],
+        ])->validate();
+
+        $query = Category::query()->withCount('products');
+        if (! empty($data['category_id'])) {
+            $category = $query->find($data['category_id']);
+        } elseif (trim((string) ($data['name'] ?? '')) !== '') {
+            $category = $query->whereRaw('LOWER(name) = ?', [mb_strtolower(trim($data['name']))])->first();
+        } else {
+            return $this->followUp('category_required', __('Specify a category ID or the exact category name.'));
+        }
+
+        if (! $category) {
+            return $this->followUp('category_not_found', __('No product category matched that ID or name.'));
+        }
+
+        return $this->jsonResult([
+            'status' => 'category_found',
+            'category' => [
+                'id' => $category->id,
+                'name' => $category->name,
+                'description' => $this->safeText($category->description, 300),
+                'status' => $this->activeLabel((bool) $category->is_active),
+                'products_count' => (int) $category->products_count,
+            ],
+        ]);
+    }
+
+    private function createCategory(array $arguments, AiChannelLink $link): AiToolResult
+    {
+        $this->authorization->authorize('categories.create');
+        $data = Validator::make($arguments, [
+            'name' => ['required', 'string', 'min:1', 'max:255'],
+            'description' => ['nullable', 'string', 'max:1000'],
+        ])->validate();
+
+        $name = trim($data['name']);
+        $existing = Category::query()->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first(['id', 'name']);
+        if ($existing) {
+            return $this->followUp('category_exists', __('A category named :name already exists (ID :id).', [
+                'name' => $existing->name,
+                'id' => $existing->id,
+            ]));
+        }
+
+        $description = trim((string) ($data['description'] ?? ''));
+        $action = AiPendingAction::create([
+            'id' => (string) Str::uuid(),
+            'tenant_id' => $this->context->tenant()->id,
+            'user_id' => $link->user_id,
+            'channel_link_id' => $link->id,
+            'action' => 'record_category',
+            'payload' => [
+                'name' => $name,
+                'description' => $description === '' ? null : $description,
+            ],
+            'status' => 'pending',
+            'expires_at' => now()->addMinutes(10),
+        ]);
+
+        return new AiToolResult(__('ai.category_draft', [
+            'name' => $name,
+            'description' => $this->safeText($description === '' ? null : $description, 300),
+        ]), $action);
+    }
+
+    private function listBrands(array $arguments): AiToolResult
+    {
+        $this->authorization->authorize('brands.view');
+        $data = Validator::make($arguments, [
+            'search' => ['nullable', 'string', 'max:100'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
+            'page' => ['nullable', 'integer', 'min:1', 'max:10000'],
+        ])->validate();
+
+        [$limit, $offset, $page] = $this->pageWindow($data);
+        $query = Brand::query()->withCount('products');
+        $term = trim((string) ($data['search'] ?? ''));
+        if ($term !== '') {
+            $query->whereRaw('LOWER(name) LIKE ?', ['%'.mb_strtolower($term).'%']);
+        }
+
+        $totalMatching = (clone $query)->count();
+        if ($totalMatching === 0) {
+            return $this->jsonResult([
+                'status' => 'brands_not_found',
+                'total_matching' => 0,
+                'message' => __('There are no brands in this workspace yet.'),
+            ]);
+        }
+
+        $brands = (clone $query)->orderBy('name')->skip($offset)->take($limit)->get();
+
+        return $this->jsonResult([
+            'status' => 'brands_found',
+            'page' => $page,
+            'per_page' => $limit,
+            'total_matching' => $totalMatching,
+            'more' => $offset + $brands->count() < $totalMatching,
+            'brands' => $brands->map(fn (Brand $brand) => [
+                'id' => $brand->id,
+                'name' => $brand->name,
+                'description' => $this->safeText($brand->description, 300),
+                'status' => $this->activeLabel((bool) $brand->is_active),
+                'products_count' => (int) $brand->products_count,
+            ])->values()->all(),
+        ]);
+    }
+
+    private function createBrand(array $arguments, AiChannelLink $link): AiToolResult
+    {
+        $this->authorization->authorize('brands.create');
+        $data = Validator::make($arguments, [
+            'name' => ['required', 'string', 'min:1', 'max:255'],
+            'description' => ['nullable', 'string', 'max:1000'],
+        ])->validate();
+
+        $name = trim($data['name']);
+        $existing = Brand::query()->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first(['id', 'name']);
+        if ($existing) {
+            return $this->followUp('brand_exists', __('A brand named :name already exists (ID :id).', [
+                'name' => $existing->name,
+                'id' => $existing->id,
+            ]));
+        }
+
+        $description = trim((string) ($data['description'] ?? ''));
+        $action = AiPendingAction::create([
+            'id' => (string) Str::uuid(),
+            'tenant_id' => $this->context->tenant()->id,
+            'user_id' => $link->user_id,
+            'channel_link_id' => $link->id,
+            'action' => 'record_brand',
+            'payload' => [
+                'name' => $name,
+                'description' => $description === '' ? null : $description,
+            ],
+            'status' => 'pending',
+            'expires_at' => now()->addMinutes(10),
+        ]);
+
+        return new AiToolResult(__('ai.brand_draft', [
+            'name' => $name,
+            'description' => $this->safeText($description === '' ? null : $description, 300),
+        ]), $action);
+    }
+
+    private function addStock(array $arguments, AiChannelLink $link): AiToolResult
+    {
+        $this->authorization->authorize('stock.adjust');
+        // Chat quantities may arrive as "5rb"; normalize before the integer validator.
+        if (array_key_exists('quantity', $arguments)) {
+            $arguments['quantity'] = $this->parseDisplayAmount($arguments['quantity']) ?? $arguments['quantity'];
+        }
+        $data = Validator::make($arguments, [
+            'product_id' => ['nullable', 'integer', 'min:1'],
+            'product_query' => ['nullable', 'string', 'max:100'],
+            'quantity' => ['required', 'integer', 'min:1', 'max:100000000'],
+            'warehouse_id' => ['nullable', 'integer', 'min:1'],
+            'warehouse_name' => ['nullable', 'string', 'max:100'],
+            'reason' => ['required', 'string', 'min:1', 'max:255'],
+            'notes' => ['nullable', 'string', 'max:65535'],
+        ])->validate();
+
+        [$product, $problem] = $this->matchProduct(
+            $data['product_id'] ?? null,
+            $data['product_query'] ?? null,
+            __('Which product should receive the stock?'),
+        );
+        if ($problem !== null) {
+            return $problem;
+        }
+        if (! $product->track_inventory) {
+            return $this->followUp('product_not_tracked', __('This product does not track inventory.'));
+        }
+
+        [$warehouse, $problem] = $this->matchWarehouse($data['warehouse_id'] ?? null, $data['warehouse_name'] ?? null);
+        if ($problem !== null) {
+            return $problem;
+        }
+
+        $notes = trim((string) ($data['notes'] ?? ''));
+        $action = AiPendingAction::create([
+            'id' => (string) Str::uuid(),
+            'tenant_id' => $this->context->tenant()->id,
+            'user_id' => $link->user_id,
+            'channel_link_id' => $link->id,
+            'action' => 'record_add_stock',
+            'payload' => [
+                'product_id' => $product->id,
+                'warehouse_id' => $warehouse->id,
+                'quantity' => (int) $data['quantity'],
+                'reason' => trim($data['reason']),
+                'notes' => $notes === '' ? null : $notes,
+            ],
+            'status' => 'pending',
+            'expires_at' => now()->addMinutes(10),
+        ]);
+
+        return new AiToolResult(__('ai.stock_draft', [
+            'product' => $product->name,
+            'quantity' => (int) $data['quantity'],
+            'unit' => $product->unit ?: 'pcs',
+            'warehouse' => $warehouse->name,
+            'reason' => trim($data['reason']),
+            'notes' => $this->safeText($notes === '' ? null : $notes, 300),
+        ]), $action);
+    }
+
+    private function listTeam(): AiToolResult
+    {
+        // Team visibility mirrors the website team page: any active member of the
+        // workspace may read the roster, but never credentials or tokens.
+        $memberships = TenantUser::query()
+            ->whereIn('status', TenantUser::SEAT_STATUSES)
+            ->with('user:id,name,email')
+            ->orderBy('joined_at')->orderBy('id')
+            ->get();
+
+        return $this->jsonResult([
+            'status' => $memberships->isEmpty() ? 'team_not_found' : 'team_members_found',
+            'count' => $memberships->count(),
+            'members' => $memberships->map(fn (TenantUser $membership) => [
+                'name' => $this->safeText($membership->user?->name),
+                'email' => $this->safeText($membership->user?->email),
+                'role' => $membership->role,
+                'status' => $membership->status === TenantUser::STATUS_INVITED
+                    ? __('Invitation pending')
+                    : __('Active'),
+            ])->values()->all(),
+        ]);
+    }
+
+    private function subscriptionInfo(): AiToolResult
+    {
+        $tenant = $this->context->tenant();
+        $subscription = $tenant->activeSubscription()->with('plan')->first();
+
+        if (! $subscription) {
+            return $this->jsonResult([
+                'status' => 'no_subscription',
+                'message' => __('No subscription information is available for this workspace.'),
+            ]);
+        }
+
+        $plan = $subscription->plan;
+        $periodEnd = $subscription->current_period_end;
+        $remainingDays = $periodEnd?->isFuture()
+            ? (int) ceil($periodEnd->diffInSeconds(now()) / 86400)
+            : null;
+
+        return $this->jsonResult([
+            'status' => 'subscription_found',
+            'subscription' => [
+                'plan' => $this->safeText($plan?->name),
+                'status' => $subscription->status,
+                'valid_until' => $periodEnd ? $periodEnd->toDateString() : __('Forever'),
+                'remaining_days' => $remainingDays,
+            ],
+        ]);
+    }
+
     private function followUp(string $status, string $message, array $data = []): AiToolResult
     {
         return new AiToolResult(json_encode([
@@ -1423,5 +1932,50 @@ class BusinessAiTools
     private function normalizePhone(?string $phone): string
     {
         return preg_replace('/\D+/', '', $phone ?? '') ?? '';
+    }
+
+    /**
+     * Parse a human-entered Indonesian amount into a plain number so chat typos like
+     * "55rb", "Rp55.000" or "1.500.000" mean the same as 55000 / 55000 / 1500000.
+     * Returns null when the value cannot be interpreted; the caller keeps the raw
+     * value so the validator can still report the original input.
+     */
+    private function parseDisplayAmount(mixed $value): ?float
+    {
+        if (is_int($value) || is_float($value)) {
+            return (float) $value;
+        }
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $lower = mb_strtolower(trim($value));
+        if ($lower === '') {
+            return null;
+        }
+
+        $multiplier = 1.0;
+        foreach (['juta' => 1_000_000, 'jt' => 1_000_000, 'ribu' => 1_000, 'rb' => 1_000, 'k' => 1_000] as $suffix => $factor) {
+            if (str_ends_with($lower, $suffix)) {
+                $multiplier = (float) $factor;
+                $lower = rtrim(substr($lower, 0, -strlen($suffix)));
+                break;
+            }
+        }
+
+        $lower = str_replace(['rp', ' '], ['', ''], trim($lower));
+        if (preg_match('/^-?\d{1,3}(?:[.,]\d{3})+$/', $lower)) {
+            // Thousand separators: 55.000, 1.500.000, 1,500,000.
+            $lower = str_replace([',', '.'], '', $lower);
+        } elseif (str_contains($lower, ',') && ! str_contains($lower, '.')) {
+            // Decimal comma: 55,5 means 55.5.
+            $lower = str_replace(',', '.', $lower);
+        }
+
+        if (! is_numeric($lower)) {
+            return null;
+        }
+
+        return (float) $lower * $multiplier;
     }
 }

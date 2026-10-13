@@ -113,6 +113,7 @@ return [
     'category_recorded' => "Product category created.\n\nID: :id\nName: :name\nDescription: :description\nStatus: :status",
     'brand_draft' => "**New Product Brand**\n\nName: :name\nDescription: :description\n\nConfirm to create this brand.",
     'brand_recorded' => "Product brand created.\n\nID: :id\nName: :name\nDescription: :description\nStatus: :status",
+    'customer_draft' => "**New Customer**\n\nName: :name\nPhone: :phone\nEmail: :email\nAddress: :address\n\nConfirm to create this customer.",
     'stock_draft' => "**Stock Addition**\n\nProduct: :product\nQuantity: +:quantity :unit\nWarehouse: :warehouse\nReason: :reason\nNotes: :notes\n\nConfirm to add this stock.",
     'stock_recorded' => "Stock added.\n\nProduct: :product\nAdded: +:quantity :unit\nWarehouse: :warehouse\nReason: :reason\nNew balance: :balance :unit",
     // Plain sentence keys (flattened into lang/<locale>.json by `php artisan lang:sync`).

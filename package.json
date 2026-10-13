@@ -5,7 +5,8 @@
         "build": "vite build",
         "dev": "vite",
         "test:pwa": "node tests/js/pwa-install-states.mjs",
-        "test:submit": "node tests/js/submit-cancel-states.mjs"
+        "test:submit": "node tests/js/submit-cancel-states.mjs",
+        "test:telegram": "node tests/js/telegram-demo-states.mjs"
     },
     "devDependencies": {
         "@tailwindcss/forms": "^0.5.2",

@@ -66,6 +66,10 @@ class TelegramClient
         $actionKey = match ($action->action) {
             'record_expense' => 'expense',
             'record_purchase' => 'purchase',
+            'record_customer' => 'customer',
+            'record_category' => 'category',
+            'record_brand' => 'brand',
+            'record_add_stock' => 'stock',
             'record_sale' => 'sale',
             default => 'action',
         };
@@ -78,6 +82,10 @@ class TelegramClient
         return match ($action->action) {
             'record_expense' => __('Confirm expense'),
             'record_purchase' => __('Confirm purchase'),
+            'record_customer' => __('Confirm customer'),
+            'record_category' => __('Confirm category'),
+            'record_brand' => __('Confirm brand'),
+            'record_add_stock' => __('Confirm stock addition'),
             'record_sale' => __('Confirm sale'),
             default => __('Confirm'),
         };

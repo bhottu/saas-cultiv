@@ -6,6 +6,7 @@ import { installSubmitLoading } from './submit-button';
 import { pwaInstall, fullscreenToggle, registerServiceWorker } from './pwa';
 import { workspaceRevokedNotice } from './workspace-notice';
 import { brandIdentityForm } from './brand-logo-preview';
+import { registerTelegramDemo } from './telegram-demo';
 
 window.Alpine = Alpine;
 
@@ -35,5 +36,9 @@ installSubmitLoading();
 // Makes the whole SaaS installable. The worker caches public build assets only and
 // never stores authenticated HTML or API data (see public/sw.js for why).
 registerServiceWorker();
+
+// Landing-page "AI Assistant via Telegram" mock conversation. Purely client-side,
+// idempotent, and a no-op when the section is not on the page.
+registerTelegramDemo();
 
 Alpine.start();

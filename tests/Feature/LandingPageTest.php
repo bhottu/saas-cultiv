@@ -134,9 +134,14 @@ class LandingPageTest extends TestCase
     {
         $html = $this->html();
 
-        // The reading order the page is written for: value -> problem -> features ->
-        // audiences -> modules -> how it works -> pricing -> FAQ -> CTA.
+        // The reading order the page is written for: hero -> AI assistant -> value ->
+        // problem -> features -> audiences -> modules -> how it works -> pricing -> FAQ
+        // -> CTA. The AI assistant section is deliberately the SECOND section, right
+        // under the hero and before the "one workspace" value proposition.
         $order = [
+            'id="main"',
+            'id="ai-assistant"',
+            'One workspace. One source of truth.',
             'id="features"',
             'id="modules"',
             'id="how-it-works"',
@@ -153,6 +158,9 @@ class LandingPageTest extends TestCase
             $this->assertGreaterThan($last, $at, "Section out of order: {$anchor}");
             $last = $at;
         }
+
+        // Exactly one such section: it must not be duplicated anywhere.
+        $this->assertSame(1, substr_count($html, 'id="ai-assistant"'));
     }
 
     public function test_the_ctas_point_at_real_routes(): void
@@ -260,5 +268,79 @@ class LandingPageTest extends TestCase
 
         // The hero headline is the only H1, and it is not the tagline.
         $this->assertStringNotContainsStringIgnoringCase($tagline, strip_tags($headings[1][0]));
+    }
+
+    /**
+     * The "AI Assistant via Telegram" marketing section.
+     *
+     * It is a pure front-end mock (the conversation is built client-side by
+     * resources/js/telegram-demo.js from a local constant), so these checks confirm the
+     * server output provides the structure the script needs, the copy is honest about
+     * being simulated, and the CTA points at a real route.
+     *
+     * Copy is asserted on the English source strings: phpunit.xml pins APP_LOCALE=en
+     * for the suite (business rules, not translation), exactly as the pricing, FAQ and
+     * "how it works" assertions above do. The Indonesian values live in lang/id and are
+     * covered by TranslationSyncTest.
+     */
+    public function test_the_ai_assistant_section_is_present_and_wellformed(): void
+    {
+        $html = $this->html();
+
+        // Its own section, once.
+        $this->assertStringContainsString('id="ai-assistant"', $html);
+
+        // The heading and the descriptive paragraph.
+        $this->assertStringContainsString('Your AI Assistant will help your business', $html);
+        $this->assertStringContainsString('Connect Cultiv One to Cultiv One AI via Telegram', $html);
+
+        // The three benefit points.
+        foreach ([
+            'Check stock via chat',
+            'Track your sales',
+            'Prepare a transaction',
+        ] as $benefit) {
+            $this->assertStringContainsString($benefit, $html);
+        }
+
+        // The transaction benefit body names "Cultiv One AI" consistently.
+        $this->assertStringContainsString('Add a sales transaction directly from the AI Assistant.', $html);
+
+        // The bot identity and the hook the script fills with messages.
+        $this->assertStringContainsString('Cultiv One AI', $html);
+        $this->assertStringContainsString('data-telegram-chat="messages"', $html);
+    }
+
+    public function test_the_ai_assistant_chat_mock_is_accessible_and_honest(): void
+    {
+        $html = $this->html();
+
+        // The forever-looping conversation is a single labelled image to assistive tech,
+        // not a stream of messages to read out; its content lives in the static list too.
+        $this->assertMatchesRegularExpression(
+            '/data-telegram-chat[\s\S]{0,200}?role="img"[\s\S]{0,400}?aria-label="[^"]*Cultiv One AI Assistant/',
+            $html,
+            'The chat mock must expose role="img" with a descriptive aria-label.'
+        );
+
+        // The message surface itself is hidden from the a11y tree (the label covers it).
+        $this->assertMatchesRegularExpression(
+            '/data-telegram-chat="messages"[^>]*aria-hidden="true"/',
+            $html,
+            'The animated message surface must be aria-hidden.'
+        );
+
+        // No live product data is claimed: the section states it is simulated.
+        $this->assertStringContainsString('Simulated example conversation.', $html);
+    }
+
+    public function test_the_ai_assistant_ctas_point_at_real_routes(): void
+    {
+        $html = $this->html();
+
+        // Primary CTA reuses the real register route; secondary targets the real
+        // #features section. Both are covered by the dead-anchor test above.
+        $this->assertStringContainsString('href="'.route('register').'"', $html);
+        $this->assertStringContainsString('href="#features"', $html);
     }
 }

@@ -172,7 +172,7 @@ class AiTelegramWebhookController extends Controller
         if (($chat['type'] ?? null) !== 'private'
             || ! isset($from['id'])
             || (string) ($chat['id'] ?? '') !== (string) $from['id']
-            || ! preg_match('/^(confirm|cancel)_(sale|expense|purchase|action):([0-9a-f-]{36})$/i', $data, $matches)) {
+            || ! preg_match('/^(confirm|cancel)_(sale|expense|purchase|customer|category|brand|stock|action):([0-9a-f-]{36})$/i', $data, $matches)) {
             $this->respondToCallback(
                 $telegram,
                 $callbackId,
@@ -228,6 +228,10 @@ class AiTelegramWebhookController extends Controller
         $statusText = match ($callbackType) {
             'expense' => $failed ? __('I could not process that request. Please try again later.') : ($confirmed ? __('Expense confirmation processed.') : __('Expense cancelled.')),
             'purchase' => $failed ? __('I could not process that request. Please try again later.') : ($confirmed ? __('Purchase confirmation processed.') : __('Purchase cancelled.')),
+            'customer' => $failed ? __('I could not process that request. Please try again later.') : ($confirmed ? __('Customer confirmation processed.') : __('Customer cancelled.')),
+            'category' => $failed ? __('I could not process that request. Please try again later.') : ($confirmed ? __('Category confirmation processed.') : __('Category cancelled.')),
+            'brand' => $failed ? __('I could not process that request. Please try again later.') : ($confirmed ? __('Brand confirmation processed.') : __('Brand cancelled.')),
+            'stock' => $failed ? __('I could not process that request. Please try again later.') : ($confirmed ? __('Stock confirmation processed.') : __('Stock cancelled.')),
             default => $failed ? __('I could not process that request. Please try again later.') : ($confirmed ? __('Sale confirmation processed.') : __('Sale cancelled.')),
         };
 
