@@ -33,6 +33,21 @@ return [
         'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
     ],
 
+    /*
+     | OpenRouter (https://openrouter.ai) — an OpenAI-compatible aggregator used as a
+     | first-class Cultiv AI provider. Only the base URL and optional attribution live
+     | here; the API key is stored in the encrypted `openrouter_api_key` column of
+     | `ai_settings` (see AiSetting, the platform-level AI configuration row) and is NEVER
+     | read from the environment or sent to the browser. Override the base URL only for a
+     | proxied/self-hosted gateway.
+     */
+    'openrouter' => [
+        'base_url' => env('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1'),
+        // Optional attribution headers OpenRouter uses for app ranking (X-Title / HTTP-Referer).
+        'title' => env('OPENROUTER_TITLE', 'Cultiv One'),
+        'site_url' => env('OPENROUTER_SITE_URL'),
+    ],
+
     // Google sign-in (OAuth via Laravel Socialite).
     //
     // Credentials live in .env only — never in this file. `redirect` must match an

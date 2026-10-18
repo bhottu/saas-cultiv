@@ -142,6 +142,7 @@ class AiProviderException extends RuntimeException
             'gemini' => 'Gemini',
             'openai' => 'OpenAI',
             'ollama' => 'Ollama',
+            'openrouter' => 'OpenRouter',
             default => __('AI provider'),
         };
         $message = __('Connection test failed for :provider: :reason', [

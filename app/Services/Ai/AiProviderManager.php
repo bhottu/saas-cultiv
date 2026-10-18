@@ -82,6 +82,7 @@ class AiProviderManager
             'openai' => new OpenAiProvider($settings, $model),
             'gemini' => new GeminiProvider($settings, $model),
             'ollama' => new OllamaProvider($settings, $model),
+            'openrouter' => new OpenRouterProvider($settings, $model),
             default => throw new RuntimeException('The configured AI provider is not supported.'),
         };
     }

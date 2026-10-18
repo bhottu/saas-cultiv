@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Models\AiSetting;
 use App\Services\Ai\AiProviderManager;
+use App\Services\Ai\OpenRouterModelCatalog;
+use App\Services\Ai\OpenRouterModelException;
 use App\Services\Ai\TelegramClient;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -12,29 +14,95 @@ use Throwable;
 
 class AiSettingsController extends AdminController
 {
-    public function edit()
+    public function edit(OpenRouterModelCatalog $openRouterModels)
     {
         $settings = AiSetting::current();
+        $primaryProvider = old('provider', $settings->provider);
+        $fallbackProvider = old('fallback_provider', $settings->fallback_provider);
+
+        // Only reach out to OpenRouter (and build the dynamic model dropdown) when the
+        // operator actually has OpenRouter selected as the primary or fallback provider —
+        // so installs that never use OpenRouter never pay for the request.
+        $openrouterModels = [];
+        $openrouterModelsError = null;
+        if (in_array('openrouter', [$primaryProvider, $fallbackProvider], true)) {
+            try {
+                $openrouterModels = $openRouterModels->models();
+            } catch (OpenRouterModelException $error) {
+                $openrouterModelsError = $error->safeMessage();
+            }
+        }
 
         return view('admin.ai.index', [
             'settings' => $settings,
             'providers' => AiSetting::PROVIDERS,
+            'openrouterModels' => $openrouterModels,
+            'openrouterModelsError' => $openrouterModelsError,
+        ]);
+    }
+
+    /**
+     * JSON model catalog for the admin UI (GET /admin/ai/openrouter/models).
+     *
+     * The frontend calls this when the operator picks OpenRouter, on page load, and on
+     * "Refresh model list". The credential is read server-side from the saved, encrypted
+     * `openrouter_api_key`; the response contains ONLY safe model fields — never the API
+     * key, Authorization header or any credential. Failures return HTTP 200 with an empty
+     * list plus a translated, non-technical `error` the UI can render verbatim.
+     *
+     * `?refresh=1` bypasses the catalog cache.
+     */
+    public function openRouterModels(Request $request, OpenRouterModelCatalog $openRouterModels)
+    {
+        try {
+            $models = $openRouterModels->models(refresh: $request->boolean('refresh'));
+        } catch (OpenRouterModelException $error) {
+            Log::warning('ai.openrouter.models_load_failed', [
+                'reason' => $error->reason,
+                'status' => $error->status,
+            ]);
+
+            return response()->json(['models' => [], 'error' => $error->safeMessage()]);
+        } catch (Throwable $error) {
+            Log::warning('ai.openrouter.models_load_failed', ['exception' => $error::class]);
+
+            return response()->json([
+                'models' => [],
+                'error' => __('The OpenRouter model list could not be loaded.'),
+            ]);
+        }
+
+        return response()->json([
+            'models' => array_map(fn (array $model): array => [
+                'id' => $model['id'],
+                'name' => $model['name'],
+                'is_free' => (bool) $model['free'],
+                'supports_tools' => (bool) $model['tool_calling'],
+                'context_length' => $model['context_length'],
+            ], $models),
+            'error' => null,
         ]);
     }
 
     public function update(Request $request)
     {
+        $settings = AiSetting::current();
+
         $data = $request->validate([
             'provider' => ['required', Rule::in(AiSetting::PROVIDERS)],
-            'model' => ['required', 'string', 'max:120', 'regex:/^[A-Za-z0-9._:-]+$/'],
+            // OpenRouter model IDs look like `provider/model-name` (optionally `:free`), so
+            // the slash must be allowed alongside the existing characters.
+            'model' => ['required', 'string', 'max:120', 'regex:/^[A-Za-z0-9._:\/-]+$/'],
             'fallback_provider' => ['nullable', Rule::in(AiSetting::PROVIDERS)],
-            'fallback_model' => ['nullable', 'string', 'max:120', 'regex:/^[A-Za-z0-9._:-]+$/'],
+            'fallback_model' => ['nullable', 'string', 'max:120', 'regex:/^[A-Za-z0-9._:\/-]+$/'],
             'openai_api_key' => ['nullable', 'string', 'max:4096'],
             'gemini_api_key' => ['nullable', 'string', 'max:4096'],
+            'openrouter_api_key' => ['nullable', 'string', 'max:4096'],
             'ollama_base_url' => ['required', 'url:http,https', 'max:255'],
             'telegram_bot_token' => ['nullable', 'string', 'max:512'],
             'clear_openai_api_key' => ['nullable', 'boolean'],
             'clear_gemini_api_key' => ['nullable', 'boolean'],
+            'clear_openrouter_api_key' => ['nullable', 'boolean'],
             'clear_telegram_bot_token' => ['nullable', 'boolean'],
         ]);
 
@@ -50,7 +118,17 @@ class AiSettingsController extends AdminController
             return back()->withInput()->withErrors(['ollama_base_url' => __('The Ollama URL cannot contain credentials, a query string or a fragment.')]);
         }
 
-        $settings = AiSetting::current();
+        // OpenRouter needs a credential — either supplied now or already saved. Only
+        // enforced when OpenRouter is actually selected (primary or fallback); every other
+        // provider configuration is untouched by this rule. Clearing the key while
+        // OpenRouter is still selected is refused, because the provider would be unusable.
+        $usesOpenRouter = $data['provider'] === 'openrouter' || ($data['fallback_provider'] ?? null) === 'openrouter';
+        if ($usesOpenRouter
+            && ! filled($data['openrouter_api_key'] ?? null)
+            && ! $settings->openrouter_api_key) {
+            return back()->withInput()->withErrors(['openrouter_api_key' => __('An OpenRouter API key is required.')]);
+        }
+
         $attributes = [
             'provider' => $data['provider'],
             'model' => trim($data['model']),
@@ -60,7 +138,7 @@ class AiSettingsController extends AdminController
         ];
         $changedSecrets = [];
 
-        foreach (['openai_api_key', 'gemini_api_key', 'telegram_bot_token'] as $field) {
+        foreach (['openai_api_key', 'gemini_api_key', 'openrouter_api_key', 'telegram_bot_token'] as $field) {
             $clearField = 'clear_'.$field;
             if ($request->boolean($clearField)) {
                 $attributes[$field] = null;

@@ -42,6 +42,28 @@ Choose plan → Invoice created → active gateway create-payment → pending (+
 - QRIS expiry: `expires_at` stored; expired payments → `expired`; new payment creates a fresh record (never reuses an expired transaction).
 - Subscription states: `trialing | active | past_due | cancelled | expired | paused`. Expired tenants keep their data (free tier) for `SAAS_DATA_RETENTION_DAYS` before purge.
 
+## AI Assistant providers
+
+Cultiv AI (Telegram + web assistant) routes every model call through the `App\Services\Ai\AiProvider`
+abstraction, so the business tools, conversation flow and system prompt are identical across vendors.
+`AiProviderManager` builds the configured provider and falls back to `fallback_provider`/`fallback_model`
+when the primary fails.
+
+| Identifier | Label | Client | Credential (`ai_settings`, encrypted) |
+|---|---|---|---|
+| `openai` | OpenAI | OpenAI chat completions | `openai_api_key` |
+| `gemini` | Gemini | Google `generateContent` | `gemini_api_key` |
+| `ollama` | Ollama | Ollama `/api/chat` | — (`ollama_base_url`) |
+| `openrouter` | OpenRouter | OpenAI-compatible aggregator | `openrouter_api_key` |
+
+OpenRouter (`https://openrouter.ai/api/v1`, base URL configurable via `OPENROUTER_BASE_URL`) is a
+first-class provider. Its API key is entered on `/admin/ai` and stored with the same encrypted cast as
+the OpenAI/Gemini keys — never in `.env`, never in the browser. Its model list is fetched dynamically
+from `GET /api/v1/models` (never hard-coded) and sorted so free (`:free` / zero-priced) and
+tool/function-calling models surface first, then cached for 6 h. The stored model value is always the raw
+OpenRouter ID (e.g. `google/gemini-2.5-flash:free`). See `app/Services/Ai/OpenRouterModelCatalog.php`
+and `tests/Feature/OpenRouterProviderTest.php`.
+
 ## Key files
 
 | Area | Files |

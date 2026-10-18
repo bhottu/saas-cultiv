@@ -6,13 +6,14 @@ use Illuminate\Database\Eloquent\Model;
 
 class AiSetting extends Model
 {
-    public const PROVIDERS = ['openai', 'gemini', 'ollama'];
+    public const PROVIDERS = ['openai', 'gemini', 'ollama', 'openrouter'];
 
     protected $guarded = [];
 
     protected $casts = [
         'openai_api_key' => 'encrypted',
         'gemini_api_key' => 'encrypted',
+        'openrouter_api_key' => 'encrypted',
         'telegram_bot_token' => 'encrypted',
         'telegram_webhook_secret' => 'encrypted',
     ];
@@ -29,6 +30,7 @@ class AiSetting extends Model
         return match ($provider) {
             'openai' => $this->openai_api_key,
             'gemini' => $this->gemini_api_key,
+            'openrouter' => $this->openrouter_api_key,
             default => null,
         };
     }

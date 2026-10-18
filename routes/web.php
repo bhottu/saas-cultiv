@@ -274,6 +274,10 @@ Route::middleware(['auth', 'verified', 'platform.admin'])->prefix('admin')->grou
     Route::get('/ai', [\App\Http\Controllers\Admin\AiSettingsController::class, 'edit'])->name('admin.ai.edit');
     Route::put('/ai', [\App\Http\Controllers\Admin\AiSettingsController::class, 'update'])->name('admin.ai.update');
     Route::post('/ai/test', [\App\Http\Controllers\Admin\AiSettingsController::class, 'testProvider'])->name('admin.ai.test');
+    // OpenRouter model catalog for the admin UI. GET (reads through the catalog cache;
+    // ?refresh=1 forces a re-fetch). Returns safe model fields only — never the credential.
+    // Same auth + platform.admin middleware as the rest of this admin group.
+    Route::get('/ai/openrouter/models', [\App\Http\Controllers\Admin\AiSettingsController::class, 'openRouterModels'])->name('admin.ai.openrouter.models');
     Route::post('/ai/telegram-webhook', [\App\Http\Controllers\Admin\AiSettingsController::class, 'registerTelegramWebhook'])->name('admin.ai.telegram-webhook');
 
     // Platform gateway selection (QRIS.PW / Kasera Pay). Kept separate from /plans
