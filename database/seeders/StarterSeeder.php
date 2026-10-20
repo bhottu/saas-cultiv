@@ -12,7 +12,7 @@ use Illuminate\Database\Seeder;
 /**
  * Local-development convenience: a ready-to-login account already on a paid plan.
  * Run: php artisan db:seed --class=StarterSeeder
- * Login: starter@cultiv.id / password
+ * Login: starter@test.com / password
  */
 class StarterSeeder extends Seeder
 {
@@ -23,7 +23,7 @@ class StarterSeeder extends Seeder
         $starter = Plan::where('slug', 'starter')->firstOrFail();
 
         $user = User::updateOrCreate(
-            ['email' => 'starter@cultiv.id'],
+            ['email' => 'starter@test.com'],
             [
                 'name' => 'Starter Account',
                 'password' => bcrypt('password'),

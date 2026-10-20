@@ -180,7 +180,10 @@ class ApplicationShellTest extends TestCase
             'The detailed sales dashboard must remain available without appearing as a second sidebar dashboard.'
         );
 
-        foreach (['Overview', 'Sales', 'Inventory', 'Workspace', 'Account'] as $group) {
+        // 'Account' became 'Utility': the redesign moved Profile/Settings/API Access and
+        // Platform admin into the bottom utility area, which is where this group now
+        // surfaces in the rendered sidebar.
+        foreach (['Overview', 'Sales', 'Inventory', 'Workspace', 'Utility'] as $group) {
             $this->assertStringContainsString($group, $sidebar);
         }
 
@@ -194,7 +197,7 @@ class ApplicationShellTest extends TestCase
 
         $groupOrder = array_map(
             fn (string $group): int => strpos($sidebar, $group),
-            ['Overview', 'Sales', 'Inventory', 'Workspace', 'Account']
+            ['Overview', 'Sales', 'Inventory', 'Workspace', 'Utility']
         );
         $sortedGroups = $groupOrder;
         sort($sortedGroups);

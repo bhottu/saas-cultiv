@@ -329,16 +329,28 @@
         }
     }
 
+    // Helper: auto-expand a group when any of its items is the active route.
+    $autoExpand = function (array $items): bool {
+        foreach ($items as $item) {
+            if (! empty($item['active'])) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    // Main navigation groups (collapsible, business menus).
     $navGroups = array_values(array_filter([
-        ['label' => __('Overview'), 'items' => $overview],
-        ['label' => __('Sales'), 'items' => $sales],
-        ['label' => __('Purchasing'), 'items' => $purchasing],
-        ['label' => __('Insights'), 'items' => $advanced],
-        ['label' => __('Inventory'), 'items' => $inventory],
-        ['label' => __('Workspace'), 'items' => $workspaceItems],
-        ['label' => __('Account'), 'items' => $account],
-        ['label' => __('Platform'), 'items' => $platform],
+        ['label' => __('Overview'), 'items' => $overview, 'autoExpand' => $autoExpand($overview), 'collapsible' => false],
+        ['label' => __('Sales'), 'icon' => 'shopping-cart', 'items' => $sales, 'autoExpand' => $autoExpand($sales)],
+        ['label' => __('Purchasing'), 'icon' => 'download', 'items' => $purchasing, 'autoExpand' => $autoExpand($purchasing)],
+        ['label' => __('Insights'), 'icon' => 'chart-pie', 'items' => $advanced, 'autoExpand' => $autoExpand($advanced)],
+        ['label' => __('Inventory'), 'icon' => 'cube', 'items' => $inventory, 'autoExpand' => $autoExpand($inventory)],
+        ['label' => __('Workspace'), 'icon' => 'office', 'items' => $workspaceItems, 'autoExpand' => $autoExpand($workspaceItems)],
     ], fn ($group) => ! empty($group['items'])));
+
+    // Utility area items (not collapsible): account + platform admin.
+    $utilityItems = array_values(array_filter(array_merge($account, $platform), fn ($item) => ! empty($item)));
 @endphp
 
 {{-- Desktop sidebar --}}
@@ -355,6 +367,28 @@
     <nav class="flex-1 overflow-y-auto px-3 py-4" aria-label="{{ __('Main navigation') }}">
         <x-sidebar-nav :groups="$navGroups" />
     </nav>
+
+    {{-- Utility area: account settings + platform admin (bottom section) --}}
+    @if (! empty($utilityItems))
+        <div class="shrink-0 border-t border-gray-200 px-3 py-3">
+            <div class="px-2 pb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
+                {{ __('Utility') }}
+            </div>
+            <ul role="list" class="space-y-1">
+                @foreach ($utilityItems as $item)
+                    <li>
+                        <x-sidebar-link :href="$item['href']"
+                                        :active="$item['active'] ?? false"
+                                        :icon="$item['icon'] ?? null"
+                                        :locked="$item['locked'] ?? false"
+                                        :lock-title="$item['lock-title'] ?? null">
+                            {{ $item['label'] }}
+                        </x-sidebar-link>
+                    </li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
 
     {{-- Active workspace context --}}
     <div class="shrink-0 border-t border-gray-200 px-5 py-4">
@@ -403,19 +437,43 @@
             <x-sidebar-nav :groups="$navGroups" />
         </nav>
 
+        {{-- Utility area: account settings + platform admin (mobile) --}}
+        @if (! empty($utilityItems))
+            <div class="shrink-0 border-t border-gray-200 px-3 py-3">
+                <div class="px-2 pb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
+                    {{ __('Utility') }}
+                </div>
+                <ul role="list" class="space-y-1">
+                    @foreach ($utilityItems as $item)
+                        <li>
+                            <x-sidebar-link :href="$item['href']"
+                                            :active="$item['active'] ?? false"
+                                            :icon="$item['icon'] ?? null"
+                                            :locked="$item['locked'] ?? false"
+                                            :lock-title="$item['lock-title'] ?? null">
+                                {{ $item['label'] }}
+                            </x-sidebar-link>
+                        </li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
         <div class="shrink-0 border-t border-gray-200 px-5 py-4">
             @auth
                 <div class="truncate text-sm font-medium text-gray-800">{{ Auth::user()->name }}</div>
                 <div class="truncate text-xs text-gray-500">{{ Auth::user()->email }}</div>
 
+                {{-- Same POST + CSRF logout form — only the trigger is restyled from
+                     a plain dropdown link into a soft-red, obviously clickable
+                     sign-out button. --}}
                 <form method="POST" action="{{ route('logout') }}" class="mt-3">
                     @csrf
 
-                    <x-dropdown-link :href="route('logout')"
-                            onclick="event.preventDefault();
-                                        this.closest('form').submit();">
+                    <button type="submit"
+                            class="w-full rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-left text-sm font-medium text-red-600 transition duration-150 ease-in-out hover:bg-red-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
                         {{ __('Log Out') }}
-                    </x-dropdown-link>
+                    </button>
                 </form>
             @endauth
         </div>

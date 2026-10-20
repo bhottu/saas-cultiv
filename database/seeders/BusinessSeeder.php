@@ -13,7 +13,7 @@ use Illuminate\Database\Seeder;
  * Local-development convenience: a ready-to-login account already on the top Business
  * plan, for trying out the unlimited-workspaces / 50-user side of the app.
  * Run: php artisan db:seed --class=BusinessSeeder
- * Login: bisnis@cultiv.id / password
+ * Login: bisnis@test.com / password
  */
 class BusinessSeeder extends Seeder
 {
@@ -24,7 +24,7 @@ class BusinessSeeder extends Seeder
         $business = Plan::where('slug', 'business')->firstOrFail();
 
         $user = User::updateOrCreate(
-            ['email' => 'bisnis@cultiv.id'],
+            ['email' => 'bisnis@test.com'],
             [
                 'name' => 'Business Account',
                 'password' => bcrypt('password'),
